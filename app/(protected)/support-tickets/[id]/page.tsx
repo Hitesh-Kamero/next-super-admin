@@ -1,0 +1,781 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { AuthGuard } from "@/components/auth-guard";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  getSupportTicket,
+  updateTicketStatus,
+  replyToTicket,
+  closeTicket,
+  getFileUrl,
+  type SupportTicket,
+} from "@/lib/support-tickets-api";
+import { toast } from "sonner";
+import { ArrowLeft, MessageSquare, X, Loader2, Video, Maximize2 } from "lucide-react";
+import Image from "next/image";
+import { formatDateIST } from "@/lib/utils";
+
+export default function SupportTicketDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const ticketId = params.id as string;
+
+  const [ticket, setTicket] = useState<SupportTicket | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isReplyOpen, setIsReplyOpen] = useState(false);
+  const [replyMessage, setReplyMessage] = useState("");
+  const [updating, setUpdating] = useState(false);
+  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+  const [fullScreenVideo, setFullScreenVideo] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (ticketId) {
+      loadTicket();
+    }
+  }, [ticketId]);
+
+  const loadTicket = async () => {
+    setLoading(true);
+    try {
+      const data = await getSupportTicket(ticketId);
+      setTicket(data);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to load ticket");
+      router.push("/support-tickets");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!ticket) return;
+    setUpdating(true);
+    try {
+      const updated = await updateTicketStatus(
+        ticket.id,
+        newStatus as "OPEN" | "IN_PROGRESS" | "WAITING_FOR_USER" | "CLOSED"
+      );
+      setTicket(updated);
+      toast.success("Status updated successfully");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update status");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleCloseTicket = async () => {
+    if (!ticket) return;
+    setUpdating(true);
+    try {
+      const updated = await closeTicket(ticket.id);
+      setTicket(updated);
+      toast.success("Ticket closed successfully");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to close ticket");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleReply = async () => {
+    if (!ticket || !replyMessage.trim()) {
+      toast.error("Please enter a reply message");
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      const updated = await replyToTicket(ticket.id, replyMessage);
+      setTicket(updated);
+      setReplyMessage("");
+      setIsReplyOpen(false);
+      toast.success("Reply sent successfully");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to send reply");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const getStatusBadgeStyle = (status: string) => {
+    switch (status) {
+      case "OPEN":
+        return "bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/30";
+      case "IN_PROGRESS":
+        return "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-500/30";
+      case "WAITING_FOR_USER":
+        return "bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-500/30";
+      case "CLOSED":
+        return "bg-gray-500/20 text-gray-700 dark:text-gray-400 border-gray-500/30";
+      default:
+        return "bg-gray-500/20 text-gray-700 dark:text-gray-400 border-gray-500/30";
+    }
+  };
+
+  if (loading) {
+    return (
+      <AuthGuard>
+        <div className="flex min-h-screen items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </AuthGuard>
+    );
+  }
+
+  if (!ticket) {
+    return (
+      <AuthGuard>
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="text-center">
+            <p className="text-muted-foreground">Ticket not found</p>
+            <Button
+              variant="outline"
+              className="mt-4"
+              onClick={() => router.push("/support-tickets")}
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Tickets
+            </Button>
+          </div>
+        </div>
+      </AuthGuard>
+    );
+  }
+
+  return (
+    <AuthGuard>
+      <div className="flex min-h-screen flex-col bg-background font-sans">
+        <main className="container mx-auto flex-1 px-4 py-4 md:py-8">
+          <div className="mb-4 md:mb-6">
+            <Button
+              variant="ghost"
+              onClick={() => router.push("/support-tickets")}
+              className="mb-3 md:mb-4"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Tickets
+            </Button>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-semibold">Ticket #{ticket.ticketNumber}</h1>
+              </div>
+            </div>
+          </div>
+
+          {/* User Details Section */}
+          <div className="mb-4 md:mb-6">
+            <Card className="p-4 md:p-6">
+              <h2 className="text-lg font-semibold mb-4">User Details</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">User ID</Label>
+                  <div className="mt-1">
+                    <button
+                      onClick={() => router.push(`/users?userId=${encodeURIComponent(ticket.userId)}`)}
+                      className="text-base font-mono text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline cursor-pointer"
+                    >
+                      {ticket.userId}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Email</Label>
+                  <div className="mt-1 text-base">{ticket.userEmail}</div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Contact Number</Label>
+                  <div className="mt-1 text-base">{ticket.userMobile || "Not provided"}</div>
+                </div>
+                {ticket.eventDocID && (
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">Event DocID</Label>
+                    <div className="mt-1">
+                      <button
+                        onClick={() => router.push(`/events?eventId=${encodeURIComponent(ticket.eventDocID!)}`)}
+                        className="text-base font-mono text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline cursor-pointer"
+                      >
+                        {ticket.eventDocID}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {ticket.eventName && (
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">Event Name</Label>
+                    <div className="mt-1 text-base">{ticket.eventName}</div>
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
+
+          {/* Mobile: No outer card wrapper */}
+          <div className="md:hidden space-y-4">
+            <div className="space-y-4">
+              <div>
+                <Label>Status</Label>
+                <div className="mt-2 flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={ticket.status}
+                      onValueChange={handleStatusChange}
+                      disabled={updating}
+                    >
+                      <SelectTrigger className="flex-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="OPEN">Open</SelectItem>
+                        <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                        <SelectItem value="WAITING_FOR_USER">Waiting for User</SelectItem>
+                        <SelectItem value="CLOSED">Closed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Badge className={`${getStatusBadgeStyle(ticket.status)} border shrink-0`}>
+                      {ticket.status.replace("_", " ")}
+                    </Badge>
+                  </div>
+                  {ticket.status !== "CLOSED" && (
+                    <Button
+                      variant="destructive"
+                      onClick={handleCloseTicket}
+                      disabled={updating}
+                      className="w-full"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Close Ticket
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {ticket.subject && (
+                <div>
+                  <Label>Subject</Label>
+                  <div className="mt-2 text-base">{ticket.subject}</div>
+                </div>
+              )}
+
+              <div>
+                <Label>Description</Label>
+                <div className="mt-2 whitespace-pre-wrap text-base leading-relaxed">
+                  {ticket.description}
+                </div>
+              </div>
+
+              {ticket.eventName && (
+                <div>
+                  <Label>Related Event</Label>
+                  <div className="mt-2 text-base">{ticket.eventName}</div>
+                </div>
+              )}
+
+              {ticket.attachments.length > 0 && (
+                <div>
+                  <Label>Attachments</Label>
+                  <div className="mt-2 grid grid-cols-2 gap-3">
+                    {ticket.attachments.map((att, idx) => {
+                      const fileUrl = getFileUrl(att.storageKey);
+                      const isImage = att.fileType === "screenshot" || (att.contentType?.startsWith("image/"));
+                      const isVideo = att.fileType === "video" || (att.contentType?.startsWith("video/"));
+                      
+                      return (
+                        <div
+                          key={idx}
+                          className="relative group border rounded-lg overflow-hidden bg-muted/50 hover:bg-muted transition-colors"
+                        >
+                          {isImage ? (
+                            <div className="relative aspect-square cursor-pointer" onClick={() => setFullScreenImage(fileUrl)}>
+                              <Image
+                                src={fileUrl}
+                                alt={att.fileName}
+                                fill
+                                className="object-cover"
+                                sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                              />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                <Maximize2 className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </div>
+                            </div>
+                          ) : isVideo ? (
+                            <div className="relative aspect-square cursor-pointer" onClick={() => setFullScreenVideo(fileUrl)}>
+                              <video
+                                src={fileUrl}
+                                className="w-full h-full object-cover"
+                                muted
+                              />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                <div className="flex items-center gap-2">
+                                  <Video className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                  <Maximize2 className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="aspect-square flex items-center justify-center p-4">
+                              <a
+                                href={fileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-primary hover:underline text-center"
+                              >
+                                {att.fileName}
+                              </a>
+                            </div>
+                          )}
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs p-1 px-2 truncate">
+                            {att.fileName}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <Label>Conversation</Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsReplyOpen(true)}
+                    disabled={ticket.status === "CLOSED"}
+                  >
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    Reply
+                  </Button>
+                </div>
+                <div className="space-y-4 rounded-lg border p-4 md:p-6">
+                  {ticket.replies.map((reply) => (
+                    <div
+                      key={reply.id}
+                      className={`rounded-lg p-4 md:p-5 border-2 ${
+                        reply.from === "admin"
+                          ? "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 md:ml-8"
+                          : "bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800 md:mr-8"
+                      }`}
+                    >
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Badge 
+                            className={
+                              reply.from === "admin"
+                                ? "bg-blue-600 text-white border-blue-700"
+                                : "bg-purple-600 text-white border-purple-700"
+                            }
+                          >
+                            {reply.from === "admin" ? "Support Team" : "User"}
+                          </Badge>
+                        </div>
+                        <span className="text-sm text-muted-foreground whitespace-nowrap">
+                          {formatDateIST(reply.createdAt)}
+                        </span>
+                      </div>
+                      <div className={`text-base leading-relaxed whitespace-pre-wrap ${
+                        reply.from === "admin" 
+                          ? "text-blue-900 dark:text-blue-100" 
+                          : "text-purple-900 dark:text-purple-100"
+                      }`}>
+                        {reply.message}
+                      </div>
+                      {reply.attachments.length > 0 && (
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                          {reply.attachments.map((att, idx) => {
+                            const fileUrl = getFileUrl(att.storageKey);
+                            const isImage = att.fileType === "screenshot" || (att.contentType?.startsWith("image/"));
+                            const isVideo = att.fileType === "video" || (att.contentType?.startsWith("video/"));
+                            
+                            return (
+                              <div
+                                key={idx}
+                                className="relative group border rounded overflow-hidden bg-muted/50 hover:bg-muted transition-colors"
+                              >
+                                {isImage ? (
+                                  <div className="relative aspect-square cursor-pointer" onClick={() => setFullScreenImage(fileUrl)}>
+                                    <Image
+                                      src={fileUrl}
+                                      alt={att.fileName}
+                                      fill
+                                      className="object-cover"
+                                      sizes="(max-width: 768px) 50vw, 33vw"
+                                    />
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                      <Maximize2 className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </div>
+                                  </div>
+                                ) : isVideo ? (
+                                  <div className="relative aspect-square cursor-pointer" onClick={() => setFullScreenVideo(fileUrl)}>
+                                    <video
+                                      src={fileUrl}
+                                      className="w-full h-full object-cover"
+                                      muted
+                                    />
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                      <div className="flex items-center gap-1">
+                                        <Video className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        <Maximize2 className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="aspect-square flex items-center justify-center p-2">
+                                    <a
+                                      href={fileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs text-primary hover:underline text-center"
+                                    >
+                                      {att.fileName}
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Desktop: Card wrapper */}
+          <Card className="hidden md:block p-6">
+            <div className="space-y-6">
+              <div>
+                <Label>Status</Label>
+                <div className="mt-2 flex items-center gap-4">
+                  <Select
+                    value={ticket.status}
+                    onValueChange={handleStatusChange}
+                    disabled={updating}
+                  >
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="OPEN">Open</SelectItem>
+                      <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                      <SelectItem value="WAITING_FOR_USER">Waiting for User</SelectItem>
+                      <SelectItem value="CLOSED">Closed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Badge className={`${getStatusBadgeStyle(ticket.status)} border`}>
+                    {ticket.status.replace("_", " ")}
+                  </Badge>
+                  {ticket.status !== "CLOSED" && (
+                    <Button
+                      variant="destructive"
+                      onClick={handleCloseTicket}
+                      disabled={updating}
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Close Ticket
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {ticket.subject && (
+                <div>
+                  <Label>Subject</Label>
+                  <div className="mt-2 text-base">{ticket.subject}</div>
+                </div>
+              )}
+
+              <div>
+                <Label>Description</Label>
+                <div className="mt-2 whitespace-pre-wrap text-base leading-relaxed">
+                  {ticket.description}
+                </div>
+              </div>
+
+              {ticket.eventName && (
+                <div>
+                  <Label>Related Event</Label>
+                  <div className="mt-2 text-base">{ticket.eventName}</div>
+                </div>
+              )}
+
+              {ticket.attachments.length > 0 && (
+                <div>
+                  <Label>Attachments</Label>
+                  <div className="mt-2 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {ticket.attachments.map((att, idx) => {
+                      const fileUrl = getFileUrl(att.storageKey);
+                      const isImage = att.fileType === "screenshot" || (att.contentType?.startsWith("image/"));
+                      const isVideo = att.fileType === "video" || (att.contentType?.startsWith("video/"));
+                      
+                      return (
+                        <div
+                          key={idx}
+                          className="relative group border rounded-lg overflow-hidden bg-muted/50 hover:bg-muted transition-colors"
+                        >
+                          {isImage ? (
+                            <div className="relative aspect-square cursor-pointer" onClick={() => setFullScreenImage(fileUrl)}>
+                              <Image
+                                src={fileUrl}
+                                alt={att.fileName}
+                                fill
+                                className="object-cover"
+                                sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                              />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                <Maximize2 className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </div>
+                            </div>
+                          ) : isVideo ? (
+                            <div className="relative aspect-square cursor-pointer" onClick={() => setFullScreenVideo(fileUrl)}>
+                              <video
+                                src={fileUrl}
+                                className="w-full h-full object-cover"
+                                muted
+                              />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                <div className="flex items-center gap-2">
+                                  <Video className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                  <Maximize2 className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="aspect-square flex items-center justify-center p-4">
+                              <a
+                                href={fileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-primary hover:underline text-center"
+                              >
+                                {att.fileName}
+                              </a>
+                            </div>
+                          )}
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs p-1 px-2 truncate">
+                            {att.fileName}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <Label>Conversation</Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsReplyOpen(true)}
+                    disabled={ticket.status === "CLOSED"}
+                  >
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    Reply
+                  </Button>
+                </div>
+                <div className="space-y-4 rounded-lg border p-4 md:p-6">
+                  {ticket.replies.map((reply) => (
+                    <div
+                      key={reply.id}
+                      className={`rounded-lg p-4 md:p-5 ${
+                        reply.from === "admin"
+                          ? "bg-primary/10 ml-8"
+                          : "bg-muted mr-8"
+                      }`}
+                    >
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-base font-semibold">
+                          {reply.from === "admin" ? "Support Team" : "User"}
+                        </span>
+                        <span className="text-sm text-muted-foreground">
+                          {formatDateIST(reply.createdAt)}
+                        </span>
+                      </div>
+                      <div className="text-base leading-relaxed whitespace-pre-wrap">
+                        {reply.message}
+                      </div>
+                      {reply.attachments.length > 0 && (
+                        <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
+                          {reply.attachments.map((att, idx) => {
+                            const fileUrl = getFileUrl(att.storageKey);
+                            const isImage = att.fileType === "screenshot" || (att.contentType?.startsWith("image/"));
+                            const isVideo = att.fileType === "video" || (att.contentType?.startsWith("video/"));
+                            
+                            return (
+                              <div
+                                key={idx}
+                                className="relative group border rounded overflow-hidden bg-muted/50 hover:bg-muted transition-colors"
+                              >
+                                {isImage ? (
+                                  <div className="relative aspect-square cursor-pointer" onClick={() => setFullScreenImage(fileUrl)}>
+                                    <Image
+                                      src={fileUrl}
+                                      alt={att.fileName}
+                                      fill
+                                      className="object-cover"
+                                      sizes="(max-width: 768px) 50vw, 33vw"
+                                    />
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                      <Maximize2 className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </div>
+                                  </div>
+                                ) : isVideo ? (
+                                  <div className="relative aspect-square cursor-pointer" onClick={() => setFullScreenVideo(fileUrl)}>
+                                    <video
+                                      src={fileUrl}
+                                      className="w-full h-full object-cover"
+                                      muted
+                                    />
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                      <div className="flex items-center gap-1">
+                                        <Video className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        <Maximize2 className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="aspect-square flex items-center justify-center p-2">
+                                    <a
+                                      href={fileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs text-primary hover:underline text-center"
+                                    >
+                                      {att.fileName}
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Card>
+        </main>
+
+        {/* Reply Dialog */}
+        <Dialog open={isReplyOpen} onOpenChange={setIsReplyOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reply to Ticket</DialogTitle>
+              <DialogDescription>
+                Your reply will be sent to the user and trigger an email notification.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="reply-message">Message</Label>
+                <Textarea
+                  id="reply-message"
+                  value={replyMessage}
+                  onChange={(e) => setReplyMessage(e.target.value)}
+                  placeholder="Enter your reply..."
+                  rows={6}
+                  className="mt-2"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsReplyOpen(false);
+                    setReplyMessage("");
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleReply} disabled={updating || !replyMessage.trim()}>
+                  {updating ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                  )}
+                  Send Reply
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Full Screen Image Viewer */}
+        {fullScreenImage && (
+          <Dialog open={!!fullScreenImage} onOpenChange={() => setFullScreenImage(null)}>
+            <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95">
+              <div className="relative w-full h-[95vh] flex items-center justify-center">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute top-4 right-4 z-10 text-white hover:bg-white/20"
+                  onClick={() => setFullScreenImage(null)}
+                >
+                  <X className="h-6 w-6" />
+                </Button>
+                <Image
+                  src={fullScreenImage}
+                  alt="Full screen preview"
+                  fill
+                  className="object-contain"
+                  sizes="95vw"
+                />
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Full Screen Video Viewer */}
+        {fullScreenVideo && (
+          <Dialog open={!!fullScreenVideo} onOpenChange={() => setFullScreenVideo(null)}>
+            <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95">
+              <div className="relative w-full h-[95vh] flex items-center justify-center">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute top-4 right-4 z-10 text-white hover:bg-white/20"
+                  onClick={() => setFullScreenVideo(null)}
+                >
+                  <X className="h-6 w-6" />
+                </Button>
+                <video
+                  src={fullScreenVideo}
+                  controls
+                  autoPlay
+                  className="max-w-full max-h-full"
+                />
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
+    </AuthGuard>
+  );
+}
+

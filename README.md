@@ -1,4 +1,6 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Kamero Super Admin
+
+This is the Kamero Super Admin portal - a [Next.js](https://nextjs.org) project for managing Kamero platform administration.
 
 ## Getting Started
 
