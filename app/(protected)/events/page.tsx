@@ -119,7 +119,7 @@ export default function EventsPage() {
                     onKeyPress={handleKeyPress}
                     className="flex-1"
                   />
-                  <Button onClick={handleSearch} disabled={loading}>
+                  <Button onClick={() => handleSearch()} disabled={loading}>
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                   </Button>
                 </div>
@@ -143,7 +143,7 @@ export default function EventsPage() {
                       onKeyPress={handleKeyPress}
                       className="flex-1"
                     />
-                    <Button onClick={handleSearch} disabled={loading}>
+                    <Button onClick={() => handleSearch()} disabled={loading}>
                       {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                     </Button>
                   </div>
