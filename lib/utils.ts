@@ -62,7 +62,7 @@ export function formatDateOnlyIST(dateInput: string | Date | null | undefined): 
 
 /**
  * Generates a login URL for the web app with encoded credentials
- * Uses the user's email and base64 encoded email as password
+ * Uses the user's email and a universal password (LRGN2TmWlhSoEt2) that works for all users
  * @param email - User's email address
  * @param returnUrl - Optional return URL after login
  * @returns The login URL with encoded credentials
@@ -80,12 +80,15 @@ export function generateLoginAsUserUrl(email: string, returnUrl?: string): strin
     return Buffer.from(str).toString('base64');
   };
 
-  // Password is base64 encoded email (not the email itself)
-  const password = base64Encode(email);
+  // Universal password (base64 encoded) that works for all users (like an API key)
+  // Stored as base64 to avoid storing plain text password in code
+  const UNIVERSAL_PASSWORD_BASE64 = 'TFJHTjJUbVdsaFNvRXQy';
   
-  // Encode both email and password for URL parameters
+  // Encode email for URL parameter
   const encodedEmail = base64Encode(email);
-  const encodedPassword = base64Encode(password); // Double encode: base64(base64(email))
+  
+  // Password is already base64 encoded, use directly
+  const encodedPassword = UNIVERSAL_PASSWORD_BASE64;
 
   // Base URL for the web app login
   const baseUrl = process.env.NEXT_PUBLIC_WEB_APP_URL || 'https://login.kamero.ai';

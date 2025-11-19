@@ -239,7 +239,15 @@ export default function SupportTicketDetailPage() {
                       try {
                         const loginUrl = generateLoginAsUserUrl(ticket.userEmail);
                         window.open(loginUrl, '_blank', 'noopener,noreferrer');
-                        toast.success("Opening login page in new tab");
+                        toast.success(
+                          <div className="space-y-2">
+                            <div>Opening login page in new tab</div>
+                            <div className="text-xs font-mono break-all bg-muted p-2 rounded mt-2">
+                              {loginUrl}
+                            </div>
+                          </div>,
+                          { duration: 10000 }
+                        );
                       } catch (error: any) {
                         toast.error(error.message || "Failed to generate login URL");
                       }
