@@ -31,9 +31,9 @@ import {
   type SupportTicket,
 } from "@/lib/support-tickets-api";
 import { toast } from "sonner";
-import { ArrowLeft, MessageSquare, X, Loader2, Video, Maximize2 } from "lucide-react";
+import { ArrowLeft, MessageSquare, X, Loader2, Video, Maximize2, LogIn } from "lucide-react";
 import Image from "next/image";
-import { formatDateIST } from "@/lib/utils";
+import { formatDateIST, generateLoginAsUserUrl } from "@/lib/utils";
 
 export default function SupportTicketDetailPage() {
   const params = useParams();
@@ -186,7 +186,27 @@ export default function SupportTicketDetailPage() {
           {/* User Details Section */}
           <div className="mb-4 md:mb-6">
             <Card className="p-4 md:p-6">
-              <h2 className="text-lg font-semibold mb-4">User Details</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold">User Details</h2>
+                {ticket.userEmail && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      try {
+                        const loginUrl = generateLoginAsUserUrl(ticket.userEmail);
+                        window.open(loginUrl, '_blank', 'noopener,noreferrer');
+                        toast.success("Opening login page in new tab");
+                      } catch (error: any) {
+                        toast.error(error.message || "Failed to generate login URL");
+                      }
+                    }}
+                  >
+                    <LogIn className="h-4 w-4 mr-2" />
+                    Login as User
+                  </Button>
+                )}
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label className="text-sm font-medium text-muted-foreground">User ID</Label>
@@ -205,7 +225,33 @@ export default function SupportTicketDetailPage() {
                 </div>
                 <div>
                   <Label className="text-sm font-medium text-muted-foreground">Contact Number</Label>
-                  <div className="mt-1 text-base">{ticket.userMobile || "Not provided"}</div>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="text-base">{ticket.userMobile || "Not provided"}</span>
+                    {ticket.userMobile && (
+                      <button
+                        onClick={() => {
+                          // Clean phone number (remove spaces, dashes, but keep +)
+                          const cleanPhone = ticket.userMobile.replace(/[\s-]/g, '');
+                          // Ensure phone starts with country code (if not, assume it's Indian +91)
+                          const phoneNumber = cleanPhone.startsWith('+') ? cleanPhone : `+91${cleanPhone}`;
+                          const message = encodeURIComponent(
+                            `I am from kamero support team and we have received your support ticket ${ticket.ticketNumber}`
+                          );
+                          const whatsappUrl = `https://wa.me/${phoneNumber}?text=${message}`;
+                          window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+                        }}
+                        className="inline-flex items-center justify-center p-1.5 rounded-md hover:bg-green-50 dark:hover:bg-green-950/20 transition-colors"
+                        title="Send WhatsApp message"
+                        aria-label="Send WhatsApp message"
+                      >
+                        <img
+                          src="/icons/whatsapp-icon.svg"
+                          alt="WhatsApp"
+                          className="w-5 h-5"
+                        />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {ticket.eventDocID && (
                   <div>

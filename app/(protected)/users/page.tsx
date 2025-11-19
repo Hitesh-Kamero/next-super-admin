@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { getUser, type AdminUserDetails } from "@/lib/users-api";
 import { toast } from "sonner";
-import { Search, Loader2, Calendar, User, Mail, Phone, ArrowLeft } from "lucide-react";
+import { Search, Loader2, Calendar, User, Mail, Phone, ArrowLeft, LogIn } from "lucide-react";
+import { generateLoginAsUserUrl } from "@/lib/utils";
 
 export default function UsersPage() {
   const router = useRouter();
@@ -165,9 +166,29 @@ export default function UsersPage() {
               {/* Mobile: Direct content cards */}
               <div className="md:hidden space-y-4">
                 <Card className="p-4">
-                  <h2 className="text-xl font-semibold mb-4">
-                    {user.name || `${user.firstName || ""} ${user.lastName || ""}`.trim() || "User"}
-                  </h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-semibold">
+                      {user.name || `${user.firstName || ""} ${user.lastName || ""}`.trim() || "User"}
+                    </h2>
+                    {user.email && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          try {
+                            const loginUrl = generateLoginAsUserUrl(user.email!);
+                            window.open(loginUrl, '_blank', 'noopener,noreferrer');
+                            toast.success("Opening login page in new tab");
+                          } catch (error: any) {
+                            toast.error(error.message || "Failed to generate login URL");
+                          }
+                        }}
+                      >
+                        <LogIn className="h-4 w-4 mr-2" />
+                        Login as User
+                      </Button>
+                    )}
+                  </div>
                   <div className="space-y-2 text-sm">
                     <div className="flex items-center gap-2">
                       <User className="h-4 w-4" />
@@ -336,9 +357,28 @@ export default function UsersPage() {
               {/* Desktop: With card wrapper */}
               <div className="hidden md:block">
                 <Card className="p-6">
-                  <h2 className="text-2xl font-semibold mb-6">
-                    {user.name || `${user.firstName || ""} ${user.lastName || ""}`.trim() || "User"}
-                  </h2>
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-2xl font-semibold">
+                      {user.name || `${user.firstName || ""} ${user.lastName || ""}`.trim() || "User"}
+                    </h2>
+                    {user.email && (
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          try {
+                            const loginUrl = generateLoginAsUserUrl(user.email!);
+                            window.open(loginUrl, '_blank', 'noopener,noreferrer');
+                            toast.success("Opening login page in new tab");
+                          } catch (error: any) {
+                            toast.error(error.message || "Failed to generate login URL");
+                          }
+                        }}
+                      >
+                        <LogIn className="h-4 w-4 mr-2" />
+                        Login as User
+                      </Button>
+                    )}
+                  </div>
                   
                   <div className="grid grid-cols-2 gap-6 mb-6">
                     <div>

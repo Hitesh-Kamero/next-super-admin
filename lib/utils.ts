@@ -59,3 +59,46 @@ export function formatDateOnlyIST(dateInput: string | Date | null | undefined): 
     return String(dateInput);
   }
 }
+
+/**
+ * Generates a login URL for the web app with encoded credentials
+ * Uses the user's email and base64 encoded email as password
+ * @param email - User's email address
+ * @param returnUrl - Optional return URL after login
+ * @returns The login URL with encoded credentials
+ */
+export function generateLoginAsUserUrl(email: string, returnUrl?: string): string {
+  if (!email) {
+    throw new Error('Email is required to generate login URL');
+  }
+
+  // Helper function to base64 encode (works in both browser and Node.js)
+  const base64Encode = (str: string): string => {
+    if (typeof window !== 'undefined') {
+      return btoa(str);
+    }
+    return Buffer.from(str).toString('base64');
+  };
+
+  // Password is base64 encoded email (not the email itself)
+  const password = base64Encode(email);
+  
+  // Encode both email and password for URL parameters
+  const encodedEmail = base64Encode(email);
+  const encodedPassword = base64Encode(password); // Double encode: base64(base64(email))
+
+  // Base URL for the web app login
+  const baseUrl = process.env.NEXT_PUBLIC_WEB_APP_URL || 'https://login.kamero.ai';
+  const loginUrl = new URL('/login', baseUrl);
+  
+  // Add encoded credentials using codewords (id = email, code = password)
+  loginUrl.searchParams.set('id', encodedEmail);
+  loginUrl.searchParams.set('code', encodedPassword);
+  
+  // Add return URL if provided
+  if (returnUrl) {
+    loginUrl.searchParams.set('returnUrl', returnUrl);
+  }
+
+  return loginUrl.toString();
+}
