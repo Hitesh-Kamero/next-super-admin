@@ -34,6 +34,49 @@ import { toast } from "sonner";
 import { ArrowLeft, MessageSquare, X, Loader2, Video, Maximize2, LogIn } from "lucide-react";
 import Image from "next/image";
 import { formatDateIST, generateLoginAsUserUrl } from "@/lib/utils";
+import parsePhoneNumber from "libphonenumber-js";
+
+// Helper function to intelligently format phone number for WhatsApp using libphonenumber-js
+const formatPhoneNumberForWhatsApp = (phone: string): string => {
+  try {
+    // Try parsing with default country as India (IN) for numbers without country code
+    const phoneNumber = parsePhoneNumber(phone, { defaultCountry: "IN" });
+    
+    if (phoneNumber) {
+      // Return the phone number in E.164 format (e.g., +91919967362908)
+      return phoneNumber.number;
+    }
+    
+    // If parsing fails, fallback to manual formatting
+    // Remove all spaces, dashes, and other non-digit characters except +
+    let cleanPhone = phone.replace(/[\s-()]/g, '');
+    
+    // If already starts with +, use as is
+    if (cleanPhone.startsWith('+')) {
+      return cleanPhone;
+    }
+    
+    // If starts with 91 (Indian country code without +), add +
+    if (cleanPhone.startsWith('91') && cleanPhone.length >= 12) {
+      return `+${cleanPhone}`;
+    }
+    
+    // If it's a 10-digit number (likely Indian mobile), add +91
+    if (/^\d{10}$/.test(cleanPhone)) {
+      return `+91${cleanPhone}`;
+    }
+    
+    // Fallback: add +91 prefix
+    return `+91${cleanPhone}`;
+  } catch (error) {
+    // If library fails, fallback to manual formatting
+    let cleanPhone = phone.replace(/[\s-()]/g, '');
+    if (cleanPhone.startsWith('+')) {
+      return cleanPhone;
+    }
+    return `+91${cleanPhone}`;
+  }
+};
 
 export default function SupportTicketDetailPage() {
   const params = useParams();
@@ -230,10 +273,8 @@ export default function SupportTicketDetailPage() {
                     {ticket.userMobile && (
                       <button
                         onClick={() => {
-                          // Clean phone number (remove spaces, dashes, but keep +)
-                          const cleanPhone = ticket.userMobile.replace(/[\s-]/g, '');
-                          // Ensure phone starts with country code (if not, assume it's Indian +91)
-                          const phoneNumber = cleanPhone.startsWith('+') ? cleanPhone : `+91${cleanPhone}`;
+                          // Intelligently format phone number (detects existing country code)
+                          const phoneNumber = formatPhoneNumberForWhatsApp(ticket.userMobile);
                           const message = encodeURIComponent(
                             `I am from kamero support team and we have received your support ticket ${ticket.ticketNumber}`
                           );
