@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { getEvent, type AdminEventDetails } from "@/lib/events-api";
 import { toast } from "sonner";
-import { Search, Loader2, Calendar, User, Hash, Tag, ArrowLeft } from "lucide-react";
+import { Search, Loader2, Calendar, User, Hash, Tag, ArrowLeft, Lock } from "lucide-react";
 
 export default function EventsPage() {
   const router = useRouter();
@@ -174,6 +174,13 @@ export default function EventsPage() {
                         <Hash className="h-4 w-4" />
                         <span className="font-medium">Hash ID:</span>
                         <span>{event.hashId}</span>
+                      </div>
+                    )}
+                    {event.pin && (
+                      <div className="flex items-center gap-2">
+                        <Lock className="h-4 w-4" />
+                        <span className="font-medium">Pin:</span>
+                        <span className="font-mono">{event.pin}</span>
                       </div>
                     )}
                     <div className="flex items-center gap-2">
@@ -348,6 +355,7 @@ export default function EventsPage() {
                         <div><span className="font-medium">Document ID: </span><span className="font-mono text-xs">{event.id}</span></div>
                         <div><span className="font-medium">Channel: </span><span>{event.channel}</span></div>
                         {event.hashId && <div><span className="font-medium">Hash ID: </span><span>{event.hashId}</span></div>}
+                        {event.pin && <div><span className="font-medium">Pin: </span><span className="font-mono">{event.pin}</span></div>}
                         <div>
                           <span className="font-medium">User ID: </span>
                           <button

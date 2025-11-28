@@ -35,6 +35,13 @@ export interface AdminUserDetails {
   defaultSelfieId?: string;
 }
 
+export interface AdminUserWalletBalance {
+  userId: string;
+  balance: number; // in paise
+  balanceInRupees?: number; // converted to rupees
+  whitelabelId?: string;
+}
+
 /**
  * Get a user by user ID, email, or mobile number
  */
@@ -50,6 +57,26 @@ export async function getUser(query: string): Promise<AdminUserDetails> {
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: "Failed to get user" }));
     throw new Error(error.message || "Failed to get user");
+  }
+
+  return response.json();
+}
+
+/**
+ * Get wallet balance for a user
+ */
+export async function getUserWallet(userId: string): Promise<AdminUserWalletBalance> {
+  const params = new URLSearchParams({
+    userId: userId.trim(),
+  });
+
+  const response = await authenticatedFetch(
+    `${API_BASE_URL}/admin/users/wallet?${params.toString()}`
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: "Failed to get wallet balance" }));
+    throw new Error(error.message || "Failed to get wallet balance");
   }
 
   return response.json();

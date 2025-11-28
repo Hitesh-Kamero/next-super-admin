@@ -30,6 +30,7 @@ import {
   getFileUrl,
   type SupportTicket,
 } from "@/lib/support-tickets-api";
+import { TicketActivityLog } from "@/components/ticket-activity-log";
 import { toast } from "sonner";
 import { ArrowLeft, MessageSquare, X, Loader2, Video, Maximize2, LogIn } from "lucide-react";
 import Image from "next/image";
@@ -323,6 +324,11 @@ export default function SupportTicketDetailPage() {
                 )}
               </div>
             </Card>
+          </div>
+
+          {/* Activity Log - Internal Only */}
+          <div className="mb-4 md:mb-6">
+            <TicketActivityLog ticketId={ticketId} />
           </div>
 
           {/* Mobile: No outer card wrapper */}

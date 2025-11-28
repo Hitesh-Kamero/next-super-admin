@@ -8,9 +8,9 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { getUser, type AdminUserDetails } from "@/lib/users-api";
+import { getUser, getUserWallet, type AdminUserDetails, type AdminUserWalletBalance } from "@/lib/users-api";
 import { toast } from "sonner";
-import { Search, Loader2, Calendar, User, Mail, Phone, ArrowLeft, LogIn } from "lucide-react";
+import { Search, Loader2, Calendar, User, Mail, Phone, ArrowLeft, LogIn, Wallet } from "lucide-react";
 import { generateLoginAsUserUrl } from "@/lib/utils";
 
 export default function UsersPage() {
@@ -19,6 +19,8 @@ export default function UsersPage() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<AdminUserDetails | null>(null);
+  const [walletBalance, setWalletBalance] = useState<AdminUserWalletBalance | null>(null);
+  const [walletLoading, setWalletLoading] = useState(false);
 
   // Auto-search if userId is provided in query params
   useEffect(() => {
@@ -33,9 +35,12 @@ export default function UsersPage() {
           const result = await getUser(userId);
           setUser(result);
           toast.success("User found successfully");
+          // Fetch wallet balance
+          fetchWalletBalance(result.userId);
         } catch (error: any) {
           toast.error(error.message || "Failed to get user");
           setUser(null);
+          setWalletBalance(null);
         } finally {
           setLoading(false);
         }
@@ -60,9 +65,12 @@ export default function UsersPage() {
       toast.success("User found successfully");
       // Update URL without reloading
       router.replace(`/users?userId=${encodeURIComponent(searchValue)}`, { scroll: false });
+      // Fetch wallet balance
+      fetchWalletBalance(result.userId);
     } catch (error: any) {
       toast.error(error.message || "Failed to get user");
       setUser(null);
+      setWalletBalance(null);
     } finally {
       setLoading(false);
     }
@@ -83,6 +91,20 @@ export default function UsersPage() {
     }
   };
 
+  const fetchWalletBalance = async (userId: string) => {
+    setWalletLoading(true);
+    try {
+      const wallet = await getUserWallet(userId);
+      setWalletBalance(wallet);
+    } catch (error: any) {
+      // Silently fail - wallet might not exist for all users
+      console.error("Failed to fetch wallet balance:", error);
+      setWalletBalance(null);
+    } finally {
+      setWalletLoading(false);
+    }
+  };
+
   const getPhoneVerificationBadgeVariant = (status?: string) => {
     switch (status) {
       case "verified":
@@ -95,6 +117,15 @@ export default function UsersPage() {
       default:
         return "outline";
     }
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
   };
 
   return (
@@ -330,6 +361,40 @@ export default function UsersPage() {
                   </div>
                 </Card>
 
+                <Card className="p-4">
+                  <h3 className="font-semibold mb-3">Wallet Balance</h3>
+                  <div className="space-y-2 text-sm">
+                    {walletLoading ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Loading wallet balance...</span>
+                      </div>
+                    ) : walletBalance ? (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <Wallet className="h-4 w-4" />
+                          <span className="font-medium">Balance: </span>
+                          <span className="font-semibold text-lg">
+                            {formatCurrency(walletBalance.balanceInRupees || walletBalance.balance / 100)}
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          <span className="font-medium">Balance in Paise: </span>
+                          <span className="font-mono">{walletBalance.balance.toLocaleString()}</span>
+                        </div>
+                        {walletBalance.whitelabelId && (
+                          <div>
+                            <span className="font-medium">Whitelabel ID: </span>
+                            <span className="font-mono text-xs">{walletBalance.whitelabelId}</span>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No wallet information available</p>
+                    )}
+                  </div>
+                </Card>
+
                 {user.authMethods && user.authMethods.length > 0 && (
                   <Card className="p-4">
                     <h3 className="font-semibold mb-3">Authentication Methods</h3>
@@ -485,6 +550,38 @@ export default function UsersPage() {
                         )}
                       </div>
                     </div>
+                  </div>
+
+                  <div className="mt-6">
+                    <h3 className="font-semibold mb-3">Wallet Balance</h3>
+                    {walletLoading ? (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Loading wallet balance...</span>
+                      </div>
+                    ) : walletBalance ? (
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-center gap-2">
+                          <Wallet className="h-4 w-4" />
+                          <span className="font-medium">Balance: </span>
+                          <span className="font-semibold text-xl">
+                            {formatCurrency(walletBalance.balanceInRupees || walletBalance.balance / 100)}
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          <span className="font-medium">Balance in Paise: </span>
+                          <span className="font-mono">{walletBalance.balance.toLocaleString()}</span>
+                        </div>
+                        {walletBalance.whitelabelId && (
+                          <div>
+                            <span className="font-medium">Whitelabel ID: </span>
+                            <span className="font-mono text-xs">{walletBalance.whitelabelId}</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No wallet information available</p>
+                    )}
                   </div>
 
                   {user.authMethods && user.authMethods.length > 0 && (

@@ -54,6 +54,35 @@ export interface ReplyRequest {
   attachments?: SupportTicketAttachment[];
 }
 
+// Activity types for ticket audit log (internal use only)
+export type TicketActivityType =
+  | "REPLY"
+  | "STATUS_CHANGE"
+  | "CLOSED"
+  | "REOPENED"
+  | "ASSIGNED"
+  | "ATTACHMENT_ADD";
+
+export interface TicketActivity {
+  id: number;
+  ticketId: string;
+  activityType: TicketActivityType;
+  adminUserId: string;
+  adminEmail: string;
+  adminDisplayName?: string;
+  adminPhotoUrl?: string;
+  description?: string;
+  oldValue?: string;
+  newValue?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface TicketActivityListResponse {
+  activities: TicketActivity[];
+  totalCount: number;
+}
+
 /**
  * Get all support tickets with pagination and optional status filter
  */
@@ -174,10 +203,69 @@ export async function closeTicket(ticketId: string): Promise<SupportTicket> {
 }
 
 /**
+ * Get ticket activities (audit log) - internal use only
+ */
+export async function getTicketActivities(
+  ticketId: string,
+  limit: number = 50,
+  skip: number = 0
+): Promise<TicketActivityListResponse> {
+  const params = new URLSearchParams({
+    limit: limit.toString(),
+    skip: skip.toString(),
+  });
+
+  const response = await authenticatedFetch(
+    `${API_BASE_URL}/admin/support_tickets/${ticketId}/activities?${params.toString()}`
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: "Failed to fetch activities" }));
+    throw new Error(error.message || "Failed to fetch ticket activities");
+  }
+
+  return response.json();
+}
+
+/**
  * Get public URL for a file stored in GCS
  */
 export function getFileUrl(storageKey: string): string {
   const bucketName = "kamero-support";
   return `https://storage.googleapis.com/${bucketName}/${storageKey}`;
+}
+
+/**
+ * Get presigned URL for uploading admin attachment
+ */
+export async function getAdminPresignedUrl(
+  ticketId: string,
+  fileName: string,
+  contentType: string,
+  fileSize: number,
+  fileType: "screenshot" | "video"
+): Promise<{ presignedUrl: string; storageKey: string }> {
+  const response = await authenticatedFetch(
+    `${API_BASE_URL}/admin/support_tickets/${ticketId}/presigned-url`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        fileName,
+        contentType,
+        fileSize,
+        fileType,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: "Failed to get upload URL" }));
+    throw new Error(error.message || "Failed to get presigned URL");
+  }
+
+  return response.json();
 }
 
