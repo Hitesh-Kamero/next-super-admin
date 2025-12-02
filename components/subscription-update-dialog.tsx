@@ -122,7 +122,8 @@ export function SubscriptionUpdateDialog({
       setUploading(true);
       let proofFileUrl: string;
       try {
-        proofFileUrl = await uploadFile(proofFile, "subscription-proofs");
+        // Store payment proof under the admin subscription proofs upload type
+        proofFileUrl = await uploadFile(proofFile, "subscription_proof");
       } catch (error: any) {
         toast.error(error.message || "Failed to upload payment proof");
         setLoading(false);

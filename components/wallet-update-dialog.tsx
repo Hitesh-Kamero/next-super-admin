@@ -113,7 +113,8 @@ export function WalletUpdateDialog({
       if (proofFile) {
         setUploading(true);
         try {
-          proofFileUrl = await uploadFile(proofFile, "wallet-proofs");
+          // Wallet balance adjustments use generic payment proofs
+          proofFileUrl = await uploadFile(proofFile, "payment_proof");
         } catch (error: any) {
           toast.error(error.message || "Failed to upload payment proof");
           setLoading(false);

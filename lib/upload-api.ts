@@ -2,16 +2,23 @@ import { authenticatedFetch } from "./api-client";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://apis.kamero.ai/v1";
 
+export type AdminUploadType =
+  | "payment_proof"
+  | "subscription_proof"
+  | "event_proof"
+  | "other";
+
 export interface AdminPresignedUrlRequest {
-  filename: string;
-  contentType: string;
-  folder?: string;
+  fileName: string;
+  contentType?: string;
+  uploadType: AdminUploadType;
 }
 
 export interface AdminPresignedUrlResponse {
+  success: boolean;
   uploadUrl: string;
-  publicUrl: string;
-  filename: string;
+  fileUrl: string;
+  expiresAt?: string;
 }
 
 /**
@@ -57,16 +64,16 @@ export async function uploadFileToGCS(uploadUrl: string, file: File): Promise<vo
 /**
  * Upload a file to GCS and return the public URL
  */
-export async function uploadFile(file: File, folder?: string): Promise<string> {
+export async function uploadFile(file: File, uploadType: AdminUploadType): Promise<string> {
   // Get presigned URL
-  const { uploadUrl, publicUrl } = await getPresignedUploadUrl({
-    filename: file.name,
+  const { uploadUrl, fileUrl } = await getPresignedUploadUrl({
+    fileName: file.name,
     contentType: file.type,
-    folder,
+    uploadType,
   });
 
   // Upload file
   await uploadFileToGCS(uploadUrl, file);
 
-  return publicUrl;
+  return fileUrl;
 }
