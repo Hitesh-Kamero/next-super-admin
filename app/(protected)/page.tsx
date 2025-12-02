@@ -44,6 +44,20 @@ export default function Home() {
                 >
                   User Search
                 </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => (window.location.href = "/subscriptions")}
+                >
+                  Subscription Search
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => (window.location.href = "/whitelabels")}
+                >
+                  Whitelabels
+                </Button>
               </div>
             </Card>
           </div>

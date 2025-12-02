@@ -9,8 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { getEvent, type AdminEventDetails } from "@/lib/events-api";
+import { EventEditDialog } from "@/components/event-edit-dialog";
 import { toast } from "sonner";
-import { Search, Loader2, Calendar, User, Hash, Tag, ArrowLeft, Lock } from "lucide-react";
+import { Search, Loader2, Calendar, User, Hash, Tag, ArrowLeft, Lock, Pencil } from "lucide-react";
 
 export default function EventsPage() {
   const router = useRouter();
@@ -18,6 +19,7 @@ export default function EventsPage() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [event, setEvent] = useState<AdminEventDetails | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   // Auto-search if eventId is provided in query params
   useEffect(() => {
@@ -70,6 +72,19 @@ export default function EventsPage() {
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       handleSearch();
+    }
+  };
+
+  const handleEditSuccess = async () => {
+    // Refresh the event data after successful edit
+    if (event) {
+      try {
+        const result = await getEvent(event.id);
+        setEvent(result);
+        toast.success("Event data refreshed");
+      } catch (error: any) {
+        toast.error("Failed to refresh event data");
+      }
     }
   };
 
@@ -157,7 +172,12 @@ export default function EventsPage() {
               {/* Mobile: Direct content cards */}
               <div className="md:hidden space-y-4">
                 <Card className="p-4">
-                  <h2 className="text-xl font-semibold mb-4">{event.name}</h2>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-semibold">{event.name}</h2>
+                    <Button size="sm" onClick={() => setEditDialogOpen(true)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </div>
                   <div className="space-y-2 text-sm">
                     <div className="flex items-center gap-2">
                       <Hash className="h-4 w-4" />
@@ -346,7 +366,13 @@ export default function EventsPage() {
               {/* Desktop: With card wrapper */}
               <div className="hidden md:block">
                 <Card className="p-6">
-                  <h2 className="text-2xl font-semibold mb-6">{event.name}</h2>
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-semibold">{event.name}</h2>
+                    <Button onClick={() => setEditDialogOpen(true)}>
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Edit Event
+                    </Button>
+                  </div>
                   
                   <div className="grid grid-cols-2 gap-6 mb-6">
                     <div>
@@ -493,6 +519,16 @@ export default function EventsPage() {
                 </Card>
               </div>
             </div>
+          )}
+
+          {/* Edit Dialog */}
+          {event && (
+            <EventEditDialog
+              event={event}
+              open={editDialogOpen}
+              onOpenChange={setEditDialogOpen}
+              onSuccess={handleEditSuccess}
+            />
           )}
         </main>
       </div>

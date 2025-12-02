@@ -9,8 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { getUser, getUserWallet, type AdminUserDetails, type AdminUserWalletBalance } from "@/lib/users-api";
+import { UserEditDialog } from "@/components/user-edit-dialog";
+import { WalletUpdateDialog } from "@/components/wallet-update-dialog";
 import { toast } from "sonner";
-import { Search, Loader2, Calendar, User, Mail, Phone, ArrowLeft, LogIn, Wallet } from "lucide-react";
+import { Search, Loader2, Calendar, User, Mail, Phone, ArrowLeft, LogIn, Wallet, Pencil } from "lucide-react";
 import { generateLoginAsUserUrl } from "@/lib/utils";
 
 export default function UsersPage() {
@@ -21,6 +23,8 @@ export default function UsersPage() {
   const [user, setUser] = useState<AdminUserDetails | null>(null);
   const [walletBalance, setWalletBalance] = useState<AdminUserWalletBalance | null>(null);
   const [walletLoading, setWalletLoading] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [walletDialogOpen, setWalletDialogOpen] = useState(false);
 
   // Auto-search if userId is provided in query params
   useEffect(() => {
@@ -102,6 +106,27 @@ export default function UsersPage() {
       setWalletBalance(null);
     } finally {
       setWalletLoading(false);
+    }
+  };
+
+  const handleEditSuccess = async () => {
+    // Refresh user data after successful edit
+    if (user) {
+      try {
+        const result = await getUser(user.id);
+        setUser(result);
+        toast.success("User data refreshed");
+      } catch (error: any) {
+        toast.error("Failed to refresh user data");
+      }
+    }
+  };
+
+  const handleWalletSuccess = async () => {
+    // Refresh wallet data after successful update
+    if (user) {
+      fetchWalletBalance(user.userId);
+      toast.success("Wallet data refreshed");
     }
   };
 
@@ -201,32 +226,36 @@ export default function UsersPage() {
                     <h2 className="text-xl font-semibold">
                       {user.name || `${user.firstName || ""} ${user.lastName || ""}`.trim() || "User"}
                     </h2>
-                    {user.email && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          try {
-                            const loginUrl = generateLoginAsUserUrl(user.email!);
-                            window.open(loginUrl, '_blank', 'noopener,noreferrer');
-                            toast.success(
-                              <div className="space-y-2">
-                                <div>Opening login page in new tab</div>
-                                <div className="text-xs font-mono break-all bg-muted p-2 rounded mt-2">
-                                  {loginUrl}
-                                </div>
-                              </div>,
-                              { duration: 10000 }
-                            );
-                          } catch (error: any) {
-                            toast.error(error.message || "Failed to generate login URL");
-                          }
-                        }}
-                      >
-                        <LogIn className="h-4 w-4 mr-2" />
-                        Login as User
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={() => setEditDialogOpen(true)}>
+                        <Pencil className="h-4 w-4" />
                       </Button>
-                    )}
+                      {user.email && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            try {
+                              const loginUrl = generateLoginAsUserUrl(user.email!);
+                              window.open(loginUrl, '_blank', 'noopener,noreferrer');
+                              toast.success(
+                                <div className="space-y-2">
+                                  <div>Opening login page in new tab</div>
+                                  <div className="text-xs font-mono break-all bg-muted p-2 rounded mt-2">
+                                    {loginUrl}
+                                  </div>
+                                </div>,
+                                { duration: 10000 }
+                              );
+                            } catch (error: any) {
+                              toast.error(error.message || "Failed to generate login URL");
+                            }
+                          }}
+                        >
+                          <LogIn className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <div className="space-y-2 text-sm">
                     <div className="flex items-center gap-2">
@@ -362,7 +391,14 @@ export default function UsersPage() {
                 </Card>
 
                 <Card className="p-4">
-                  <h3 className="font-semibold mb-3">Wallet Balance</h3>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold">Wallet Balance</h3>
+                    {walletBalance && (
+                      <Button size="sm" variant="outline" onClick={() => setWalletDialogOpen(true)}>
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
                   <div className="space-y-2 text-sm">
                     {walletLoading ? (
                       <div className="flex items-center gap-2">
@@ -434,31 +470,37 @@ export default function UsersPage() {
                     <h2 className="text-2xl font-semibold">
                       {user.name || `${user.firstName || ""} ${user.lastName || ""}`.trim() || "User"}
                     </h2>
-                    {user.email && (
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          try {
-                            const loginUrl = generateLoginAsUserUrl(user.email!);
-                            window.open(loginUrl, '_blank', 'noopener,noreferrer');
-                            toast.success(
-                              <div className="space-y-2">
-                                <div>Opening login page in new tab</div>
-                                <div className="text-xs font-mono break-all bg-muted p-2 rounded mt-2">
-                                  {loginUrl}
-                                </div>
-                              </div>,
-                              { duration: 10000 }
-                            );
-                          } catch (error: any) {
-                            toast.error(error.message || "Failed to generate login URL");
-                          }
-                        }}
-                      >
-                        <LogIn className="h-4 w-4 mr-2" />
-                        Login as User
+                    <div className="flex gap-2">
+                      <Button onClick={() => setEditDialogOpen(true)}>
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Edit User
                       </Button>
-                    )}
+                      {user.email && (
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            try {
+                              const loginUrl = generateLoginAsUserUrl(user.email!);
+                              window.open(loginUrl, '_blank', 'noopener,noreferrer');
+                              toast.success(
+                                <div className="space-y-2">
+                                  <div>Opening login page in new tab</div>
+                                  <div className="text-xs font-mono break-all bg-muted p-2 rounded mt-2">
+                                    {loginUrl}
+                                  </div>
+                                </div>,
+                                { duration: 10000 }
+                              );
+                            } catch (error: any) {
+                              toast.error(error.message || "Failed to generate login URL");
+                            }
+                          }}
+                        >
+                          <LogIn className="h-4 w-4 mr-2" />
+                          Login as User
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-6 mb-6">
@@ -553,7 +595,15 @@ export default function UsersPage() {
                   </div>
 
                   <div className="mt-6">
-                    <h3 className="font-semibold mb-3">Wallet Balance</h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold">Wallet Balance</h3>
+                      {walletBalance && (
+                        <Button size="sm" variant="outline" onClick={() => setWalletDialogOpen(true)}>
+                          <Pencil className="h-3 w-3 mr-1" />
+                          Update Balance
+                        </Button>
+                      )}
+                    </div>
                     {walletLoading ? (
                       <div className="flex items-center gap-2 text-sm">
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -649,6 +699,26 @@ export default function UsersPage() {
                 </Card>
               </div>
             </div>
+          )}
+
+          {/* Edit Dialogs */}
+          {user && (
+            <UserEditDialog
+              user={user}
+              open={editDialogOpen}
+              onOpenChange={setEditDialogOpen}
+              onSuccess={handleEditSuccess}
+            />
+          )}
+          {user && walletBalance && (
+            <WalletUpdateDialog
+              targetId={user.userId}
+              targetType="user"
+              currentBalance={walletBalance.balance}
+              open={walletDialogOpen}
+              onOpenChange={setWalletDialogOpen}
+              onSuccess={handleWalletSuccess}
+            />
           )}
         </main>
       </div>

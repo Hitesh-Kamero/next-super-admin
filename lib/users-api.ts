@@ -82,3 +82,79 @@ export async function getUserWallet(userId: string): Promise<AdminUserWalletBala
   return response.json();
 }
 
+export interface AdminUserUpdateRequest {
+  userId: string;
+  email?: string;
+  reason?: string;
+}
+
+export interface AdminUserUpdateResponse {
+  success: boolean;
+  userId: string;
+  message?: string;
+  updatedFields?: string[];
+}
+
+/**
+ * Update user by super admin
+ */
+export async function updateUser(data: AdminUserUpdateRequest): Promise<AdminUserUpdateResponse> {
+  const response = await authenticatedFetch(
+    `${API_BASE_URL}/admin/users/update`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: "Failed to update user" }));
+    throw new Error(error.message || "Failed to update user");
+  }
+
+  return response.json();
+}
+
+export interface AdminWalletUpdateRequest {
+  targetId: string;
+  targetType: "user" | "whitelabel";
+  newBalance: number; // in paise
+  reason: string;
+  proofFileUrl?: string;
+}
+
+export interface AdminWalletUpdateResponse {
+  success: boolean;
+  targetId: string;
+  oldBalance?: number;
+  newBalance?: number;
+  difference?: number;
+  message?: string;
+}
+
+/**
+ * Update wallet balance by super admin
+ */
+export async function updateWallet(data: AdminWalletUpdateRequest): Promise<AdminWalletUpdateResponse> {
+  const response = await authenticatedFetch(
+    `${API_BASE_URL}/admin/wallet/update`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: "Failed to update wallet" }));
+    throw new Error(error.message || "Failed to update wallet");
+  }
+
+  return response.json();
+}
+

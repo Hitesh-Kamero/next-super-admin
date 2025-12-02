@@ -121,3 +121,51 @@ export async function getEvent(query: string): Promise<AdminEventDetails> {
   return response.json();
 }
 
+export interface AdminEventUpdateRequest {
+  eventId: string;
+  name?: string;
+  hashId?: string;
+  maxPhotos?: number;
+  expiresAt?: string;
+  eventDate?: string;
+  isArchived?: boolean;
+  isEventDisabled?: boolean;
+  isGuestUploadEnabled?: boolean;
+  guestMaxPhotos?: number;
+  isRegistrationRequired?: boolean;
+  isPrivateFaces?: boolean;
+  allowEnquiry?: boolean;
+  reason?: string;
+  proofFileUrl?: string;
+}
+
+export interface AdminEventUpdateResponse {
+  success: boolean;
+  eventId: string;
+  message?: string;
+  updatedFields?: string[];
+}
+
+/**
+ * Update an event by super admin
+ */
+export async function updateEvent(data: AdminEventUpdateRequest): Promise<AdminEventUpdateResponse> {
+  const response = await authenticatedFetch(
+    `${API_BASE_URL}/admin/events/update`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: "Failed to update event" }));
+    throw new Error(error.message || "Failed to update event");
+  }
+
+  return response.json();
+}
+
