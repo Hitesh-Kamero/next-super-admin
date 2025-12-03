@@ -58,6 +58,13 @@ export default function Home() {
                 >
                   Whitelabels
                 </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => (window.location.href = "/reports")}
+                >
+                  Face Analytics Reports
+                </Button>
               </div>
             </Card>
           </div>

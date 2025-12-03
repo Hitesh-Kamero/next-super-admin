@@ -26,6 +26,7 @@ export function TopNavigation() {
     { href: "/support-tickets", label: "Support Tickets" },
     { href: "/events", label: "Event Search" },
     { href: "/users", label: "User Search" },
+    { href: "/reports", label: "Reports" },
   ];
 
   const isActive = (href: string) => {
