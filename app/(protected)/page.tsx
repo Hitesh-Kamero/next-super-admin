@@ -2,9 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import Link from "next/link";
+import { useAuth } from "@/lib/auth-context";
 
 export default function Home() {
+  const { isOwner } = useAuth();
 
   return (
     <div className="flex min-h-screen flex-col bg-background font-sans">
@@ -58,13 +59,15 @@ export default function Home() {
                 >
                   Whitelabels
                 </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => (window.location.href = "/reports")}
-                >
-                  Face Analytics Reports
-                </Button>
+                {isOwner && (
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => (window.location.href = "/reports")}
+                  >
+                    Face Analytics Reports
+                  </Button>
+                )}
               </div>
             </Card>
           </div>

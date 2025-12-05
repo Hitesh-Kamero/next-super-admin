@@ -13,21 +13,29 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 
 export function TopNavigation() {
-  const { user, logout } = useAuth();
+  const { user, logout, isOwner } = useAuth();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const navigationItems = [
-    { href: "/", label: "Home" },
-    { href: "/support-tickets", label: "Support Tickets" },
-    { href: "/events", label: "Event Search" },
-    { href: "/users", label: "User Search" },
-    { href: "/reports", label: "Reports" },
-  ];
+  const navigationItems = useMemo(() => {
+    const items = [
+      { href: "/", label: "Home" },
+      { href: "/support-tickets", label: "Support Tickets" },
+      { href: "/events", label: "Event Search" },
+      { href: "/users", label: "User Search" },
+    ];
+
+    // Only show Reports link for owners
+    if (isOwner) {
+      items.push({ href: "/reports", label: "Reports" });
+    }
+
+    return items;
+  }, [isOwner]);
 
   const isActive = (href: string) => {
     if (href === "/") {
