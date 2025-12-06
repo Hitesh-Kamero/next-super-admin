@@ -169,3 +169,55 @@ export async function updateEvent(data: AdminEventUpdateRequest): Promise<AdminE
   return response.json();
 }
 
+export interface FTPCredentials {
+  sftpHost: string;
+  sftpPort: number;
+  ftpHost: string;
+  ftpPort: number;
+  username: string;
+  password: string;
+  instructions: string;
+  ftpUploadCount?: number;
+  ftpCreatedAt?: string;
+}
+
+/**
+ * Get FTP/SFTP credentials for an event
+ */
+export async function getEventFTPCredentials(eventDocId: string): Promise<FTPCredentials> {
+  const response = await authenticatedFetch(
+    `${API_BASE_URL}/admin/events/${eventDocId}/ftp/credentials`
+  );
+
+  if (!response.ok) {
+    if (response.status === 400) {
+      const error = await response.json().catch(() => ({ message: "FTP is not enabled for this event" }));
+      throw new Error(error.message || "FTP is not enabled for this event");
+    }
+    const error = await response.json().catch(() => ({ message: "Failed to get FTP credentials" }));
+    throw new Error(error.message || "Failed to get FTP credentials");
+  }
+
+  const data = await response.json();
+  
+  // Transform API response to match component expectations
+  // API returns SFTP credentials, but component needs both SFTP and FTP
+  const sftpHost = data.host || "sftp.kamero.ai";
+  const sftpPort = data.port || 22;
+  const ftpHost = "ftp.kamero.ai";
+  const ftpPort = 21;
+  const username = data.username || "";
+  const password = data.password || "";
+
+  return {
+    sftpHost,
+    sftpPort,
+    ftpHost,
+    ftpPort,
+    username,
+    password,
+    instructions: `1. Connect using SFTP (recommended) or FTP\n2. Use the credentials above\n3. Upload photos to the root directory\n4. Photos will be automatically processed and added to the event`,
+    ftpUploadCount: 0,
+  };
+}
+
