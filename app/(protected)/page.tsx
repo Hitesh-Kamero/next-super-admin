@@ -58,6 +58,34 @@ export default function Home() {
                 >
                   Whitelabels
                 </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => (window.location.href = "/recent-signups")}
+                >
+                  Recent Signups
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => (window.location.href = "/web-leads")}
+                >
+                  Web Leads
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => (window.location.href = "/orders")}
+                >
+                  Orders
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => (window.location.href = "/audit-logs")}
+                >
+                  Audit Logs
+                </Button>
               </div>
             </Card>
           </div>

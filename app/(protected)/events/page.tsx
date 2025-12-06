@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { getEvent, type AdminEventDetails } from "@/lib/events-api";
 import { EventEditDialog } from "@/components/event-edit-dialog";
+import { FTPCredentialsCard } from "@/components/ftp-credentials-card";
 import { toast } from "sonner";
 import { Search, Loader2, Calendar, User, Hash, Tag, ArrowLeft, Lock, Pencil } from "lucide-react";
 
@@ -518,6 +519,13 @@ export default function EventsPage() {
                   </div>
                 </Card>
               </div>
+            </div>
+          )}
+
+          {/* FTP Credentials */}
+          {event && (
+            <div className="mb-6">
+              <FTPCredentialsCard eventDocId={event.id} eventName={event.name} />
             </div>
           )}
 
