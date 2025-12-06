@@ -831,6 +831,7 @@ export default function SupportTicketDetailPage() {
         {fullScreenImage && (
           <Dialog open={!!fullScreenImage} onOpenChange={() => setFullScreenImage(null)}>
             <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95">
+              <DialogTitle className="sr-only">Full Screen Image Preview</DialogTitle>
               <div className="relative w-full h-[95vh] flex items-center justify-center">
                 <Button
                   variant="ghost"
@@ -856,6 +857,7 @@ export default function SupportTicketDetailPage() {
         {fullScreenVideo && (
           <Dialog open={!!fullScreenVideo} onOpenChange={() => setFullScreenVideo(null)}>
             <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95">
+              <DialogTitle className="sr-only">Full Screen Video Preview</DialogTitle>
               <div className="relative w-full h-[95vh] flex items-center justify-center">
                 <Button
                   variant="ghost"

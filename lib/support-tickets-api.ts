@@ -84,12 +84,14 @@ export interface TicketActivityListResponse {
 }
 
 /**
- * Get all support tickets with pagination and optional status filter
+ * Get all support tickets with pagination, optional status filter, and sorting
  */
 export async function getAllSupportTickets(
   skip: number = 0,
   limit: number = 20,
-  status?: "OPEN" | "IN_PROGRESS" | "WAITING_FOR_USER" | "CLOSED"
+  status?: "OPEN" | "IN_PROGRESS" | "WAITING_FOR_USER" | "CLOSED",
+  sortBy?: "createdAt" | "updatedAt" | "ticketNumber" | "status",
+  sortOrder?: "asc" | "desc"
 ): Promise<SupportTicketsListResponse> {
   const params = new URLSearchParams({
     skip: skip.toString(),
@@ -97,6 +99,12 @@ export async function getAllSupportTickets(
   });
   if (status) {
     params.append("status", status);
+  }
+  if (sortBy) {
+    params.append("sortBy", sortBy);
+  }
+  if (sortOrder) {
+    params.append("sortOrder", sortOrder);
   }
 
   const response = await authenticatedFetch(

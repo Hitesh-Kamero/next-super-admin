@@ -27,10 +27,13 @@ import {
   type SupportTicketsListResponse,
 } from "@/lib/support-tickets-api";
 import { toast } from "sonner";
-import { Eye, Loader2 } from "lucide-react";
+import { Eye, Loader2, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { formatDateOnlyIST } from "@/lib/utils";
 
 const ITEMS_PER_PAGE = 20;
+
+type SortField = "createdAt" | "updatedAt" | "ticketNumber" | "status";
+type SortOrder = "asc" | "desc";
 
 export default function SupportTicketsPage() {
   const router = useRouter();
@@ -40,14 +43,46 @@ export default function SupportTicketsPage() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(0);
+  const [sortBy, setSortBy] = useState<SortField>("createdAt");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
 
-  const loadTickets = async (page: number = 0, status?: string) => {
+  const handleSort = (field: SortField) => {
+    if (sortBy === field) {
+      // Toggle sort order if clicking the same field
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      // Set new field and default to descending
+      setSortBy(field);
+      setSortOrder("desc");
+    }
+    setCurrentPage(0); // Reset to first page when sorting changes
+  };
+
+  const getSortIcon = (field: SortField) => {
+    if (sortBy !== field) {
+      return <ArrowUpDown className="h-4 w-4 ml-1 opacity-50" />;
+    }
+    return sortOrder === "asc" ? (
+      <ArrowUp className="h-4 w-4 ml-1" />
+    ) : (
+      <ArrowDown className="h-4 w-4 ml-1" />
+    );
+  };
+
+  const loadTickets = async (
+    page: number = 0,
+    status?: string,
+    sortByField?: SortField,
+    sortOrderValue?: SortOrder
+  ) => {
     setLoading(true);
     try {
       const response: SupportTicketsListResponse = await getAllSupportTickets(
         page * ITEMS_PER_PAGE,
         ITEMS_PER_PAGE,
-        status && status !== "all" ? (status as any) : undefined
+        status && status !== "all" ? (status as any) : undefined,
+        sortByField,
+        sortOrderValue
       );
       setTickets(response.tickets);
       setTotalCount(response.totalCount);
@@ -60,8 +95,8 @@ export default function SupportTicketsPage() {
   };
 
   useEffect(() => {
-    loadTickets(currentPage, statusFilter);
-  }, [currentPage, statusFilter]);
+    loadTickets(currentPage, statusFilter, sortBy, sortOrder);
+  }, [currentPage, statusFilter, sortBy, sortOrder]);
 
 
   const getStatusBadgeStyle = (status: string) => {
@@ -213,11 +248,35 @@ export default function SupportTicketsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Ticket #</TableHead>
+                        <TableHead>
+                          <button
+                            onClick={() => handleSort("ticketNumber")}
+                            className="flex items-center hover:text-primary transition-colors"
+                          >
+                            Ticket #
+                            {getSortIcon("ticketNumber")}
+                          </button>
+                        </TableHead>
                         <TableHead>User</TableHead>
                         <TableHead>Subject</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Created</TableHead>
+                        <TableHead>
+                          <button
+                            onClick={() => handleSort("status")}
+                            className="flex items-center hover:text-primary transition-colors"
+                          >
+                            Status
+                            {getSortIcon("status")}
+                          </button>
+                        </TableHead>
+                        <TableHead>
+                          <button
+                            onClick={() => handleSort("createdAt")}
+                            className="flex items-center hover:text-primary transition-colors"
+                          >
+                            Created
+                            {getSortIcon("createdAt")}
+                          </button>
+                        </TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
