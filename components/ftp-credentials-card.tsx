@@ -259,7 +259,7 @@ export function FTPCredentialsCard({ eventDocId, eventName }: FTPCredentialsCard
         </div>
 
         {/* Stats */}
-        {credentials.ftpUploadCount > 0 && (
+        {(credentials.ftpUploadCount ?? 0) > 0 && (
           <div className="border-t pt-4">
             <div className="text-sm">
               <span className="text-muted-foreground">Photos uploaded via FTP: </span>
