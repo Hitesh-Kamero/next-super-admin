@@ -27,6 +27,7 @@ export function TopNavigation() {
       { href: "/support-tickets", label: "Support Tickets" },
       { href: "/events", label: "Event Search" },
       { href: "/users", label: "User Search" },
+      { href: "/seller-wallets", label: "Seller Wallets" },
     ];
 
     // Only show Reports link for owners

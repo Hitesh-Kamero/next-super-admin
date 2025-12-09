@@ -83,6 +83,13 @@ export default function Home() {
                 <Button
                   variant="outline"
                   className="w-full justify-start"
+                  onClick={() => (window.location.href = "/seller-wallets")}
+                >
+                  Seller Wallets
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
                   onClick={() => (window.location.href = "/audit-logs")}
                 >
                   Audit Logs

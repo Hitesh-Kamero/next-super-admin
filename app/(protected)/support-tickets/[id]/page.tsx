@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AuthGuard } from "@/components/auth-guard";
 import { Button } from "@/components/ui/button";
@@ -28,11 +28,13 @@ import {
   replyToTicket,
   closeTicket,
   getFileUrl,
+  getAdminPresignedUrl,
   type SupportTicket,
+  type SupportTicketAttachment,
 } from "@/lib/support-tickets-api";
 import { TicketActivityLog } from "@/components/ticket-activity-log";
 import { toast } from "sonner";
-import { ArrowLeft, MessageSquare, X, Loader2, Video, Maximize2, LogIn } from "lucide-react";
+import { ArrowLeft, MessageSquare, X, Loader2, Video, Maximize2, LogIn, Upload, FileImage, Paperclip } from "lucide-react";
 import Image from "next/image";
 import { formatDateIST, generateLoginAsUserUrl } from "@/lib/utils";
 import parsePhoneNumber from "libphonenumber-js";
@@ -91,6 +93,11 @@ export default function SupportTicketDetailPage() {
   const [updating, setUpdating] = useState(false);
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
   const [fullScreenVideo, setFullScreenVideo] = useState<string | null>(null);
+  
+  // File attachment state for admin replies
+  const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (ticketId) {
@@ -142,6 +149,102 @@ export default function SupportTicketDetailPage() {
     }
   };
 
+  // File attachment handlers
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const validFiles: File[] = [];
+    
+    for (const file of files) {
+      // Validate file type (images and videos only)
+      const isImage = file.type.startsWith("image/");
+      const isVideo = file.type.startsWith("video/");
+      
+      if (!isImage && !isVideo) {
+        toast.error(`Invalid file type: ${file.name}. Only images and videos are allowed.`);
+        continue;
+      }
+      
+      // Validate file size
+      const maxSize = isImage ? 100 * 1024 * 1024 : 1024 * 1024 * 1024; // 100MB for images, 1GB for videos
+      if (file.size > maxSize) {
+        toast.error(`${file.name} exceeds the ${isImage ? '100MB' : '1GB'} limit`);
+        continue;
+      }
+      
+      validFiles.push(file);
+    }
+    
+    if (validFiles.length > 0) {
+      setReplyAttachments(prev => [...prev, ...validFiles]);
+    }
+    
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setReplyAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const clearAllAttachments = () => {
+    setReplyAttachments([]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const getFileType = (file: File): "screenshot" | "video" => {
+    return file.type.startsWith("video/") ? "video" : "screenshot";
+  };
+
+  const uploadAttachments = async (ticketId: string): Promise<SupportTicketAttachment[]> => {
+    const uploadedAttachments: SupportTicketAttachment[] = [];
+    
+    for (let i = 0; i < replyAttachments.length; i++) {
+      const file = replyAttachments[i];
+      setUploadProgress(`Uploading ${i + 1}/${replyAttachments.length}: ${file.name}`);
+      
+      try {
+        // Get presigned URL
+        const { presignedUrl, storageKey } = await getAdminPresignedUrl(
+          ticketId,
+          file.name,
+          file.type,
+          file.size,
+          getFileType(file)
+        );
+        
+        // Upload file to GCS
+        const uploadResponse = await fetch(presignedUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": file.type,
+          },
+          body: file,
+        });
+        
+        if (!uploadResponse.ok) {
+          throw new Error(`Failed to upload ${file.name}`);
+        }
+        
+        uploadedAttachments.push({
+          storageKey,
+          fileName: file.name,
+          fileType: getFileType(file),
+          contentType: file.type,
+          fileSize: file.size,
+        });
+      } catch (error: any) {
+        toast.error(`Failed to upload ${file.name}: ${error.message}`);
+        throw error;
+      }
+    }
+    
+    return uploadedAttachments;
+  };
+
   const handleReply = async () => {
     if (!ticket || !replyMessage.trim()) {
       toast.error("Please enter a reply message");
@@ -150,15 +253,24 @@ export default function SupportTicketDetailPage() {
 
     setUpdating(true);
     try {
-      const updated = await replyToTicket(ticket.id, replyMessage);
+      // Upload attachments first if any
+      let attachments: SupportTicketAttachment[] = [];
+      if (replyAttachments.length > 0) {
+        attachments = await uploadAttachments(ticket.id);
+      }
+      
+      setUploadProgress("");
+      const updated = await replyToTicket(ticket.id, replyMessage, attachments);
       setTicket(updated);
       setReplyMessage("");
+      clearAllAttachments();
       setIsReplyOpen(false);
       toast.success("Reply sent successfully");
     } catch (error: any) {
       toast.error(error.message || "Failed to send reply");
     } finally {
       setUpdating(false);
+      setUploadProgress("");
     }
   };
 
@@ -784,8 +896,14 @@ export default function SupportTicketDetailPage() {
         </main>
 
         {/* Reply Dialog */}
-        <Dialog open={isReplyOpen} onOpenChange={setIsReplyOpen}>
-          <DialogContent>
+        <Dialog open={isReplyOpen} onOpenChange={(open) => {
+          setIsReplyOpen(open);
+          if (!open) {
+            setReplyMessage("");
+            clearAllAttachments();
+          }
+        }}>
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Reply to Ticket</DialogTitle>
               <DialogDescription>
@@ -804,12 +922,117 @@ export default function SupportTicketDetailPage() {
                   className="mt-2"
                 />
               </div>
+              
+              {/* File Attachments Section */}
+              <div>
+                <Label className="flex items-center gap-2">
+                  <Paperclip className="h-4 w-4" />
+                  Attachments (Optional)
+                </Label>
+                <div className="text-xs text-muted-foreground mt-1 mb-2">
+                  Attach screenshots (up to 100MB) or videos (up to 1GB) to your reply.
+                </div>
+                
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,video/*"
+                  multiple
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="mb-3"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Add Files
+                </Button>
+                
+                {/* Attachment Preview Grid */}
+                {replyAttachments.length > 0 && (
+                  <div className="border rounded-lg p-3 bg-muted/30">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">{replyAttachments.length} file(s) selected</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearAllAttachments}
+                        className="text-xs text-muted-foreground hover:text-destructive"
+                      >
+                        Clear All
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                      {replyAttachments.map((file, index) => {
+                        const isImage = file.type.startsWith("image/");
+                        const isVideo = file.type.startsWith("video/");
+                        const previewUrl = URL.createObjectURL(file);
+                        
+                        return (
+                          <div
+                            key={index}
+                            className="relative group border rounded-lg overflow-hidden bg-background"
+                          >
+                            {isImage ? (
+                              <div className="aspect-square relative">
+                                <img
+                                  src={previewUrl}
+                                  alt={file.name}
+                                  className="w-full h-full object-cover"
+                                  onLoad={() => URL.revokeObjectURL(previewUrl)}
+                                />
+                              </div>
+                            ) : isVideo ? (
+                              <div className="aspect-square relative flex items-center justify-center bg-black/10">
+                                <Video className="h-8 w-8 text-muted-foreground" />
+                              </div>
+                            ) : (
+                              <div className="aspect-square relative flex items-center justify-center">
+                                <FileImage className="h-8 w-8 text-muted-foreground" />
+                              </div>
+                            )}
+                            <div className="absolute inset-x-0 bottom-0 bg-black/70 text-white p-1.5">
+                              <div className="text-xs truncate">{file.name}</div>
+                              <div className="text-[10px] text-gray-300">
+                                {(file.size / (1024 * 1024)).toFixed(1)} MB
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeAttachment(index)}
+                              className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Upload Progress */}
+              {uploadProgress && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {uploadProgress}
+                </div>
+              )}
+              
               <div className="flex justify-end gap-2">
                 <Button
                   variant="outline"
                   onClick={() => {
                     setIsReplyOpen(false);
                     setReplyMessage("");
+                    clearAllAttachments();
                   }}
                 >
                   Cancel
@@ -820,7 +1043,10 @@ export default function SupportTicketDetailPage() {
                   ) : (
                     <MessageSquare className="h-4 w-4 mr-2" />
                   )}
-                  Send Reply
+                  {replyAttachments.length > 0 
+                    ? `Send Reply with ${replyAttachments.length} file(s)`
+                    : "Send Reply"
+                  }
                 </Button>
               </div>
             </div>

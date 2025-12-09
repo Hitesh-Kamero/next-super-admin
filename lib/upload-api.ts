@@ -6,6 +6,7 @@ export type AdminUploadType =
   | "payment_proof"
   | "subscription_proof"
   | "event_proof"
+  | "settlement_proof"
   | "other";
 
 export interface AdminPresignedUrlRequest {
