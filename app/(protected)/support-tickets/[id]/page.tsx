@@ -29,8 +29,11 @@ import {
   closeTicket,
   getFileUrl,
   getAdminPresignedUrl,
+  listAdminUsers,
+  assignTicket,
   type SupportTicket,
   type SupportTicketAttachment,
+  type AdminUserInfo,
 } from "@/lib/support-tickets-api";
 import { TicketActivityLog } from "@/components/ticket-activity-log";
 import { toast } from "sonner";
@@ -99,11 +102,42 @@ export default function SupportTicketDetailPage() {
   const [uploadProgress, setUploadProgress] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Assignment state
+  const [adminUsers, setAdminUsers] = useState<AdminUserInfo[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
   useEffect(() => {
     if (ticketId) {
       loadTicket();
+      loadAdminUsers();
     }
   }, [ticketId]);
+
+  const loadAdminUsers = async () => {
+    setLoadingUsers(true);
+    try {
+      const users = await listAdminUsers();
+      setAdminUsers(users);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to load admin users");
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleAssignTicket = async (assignedToUserID: string) => {
+    if (!ticket) return;
+    setUpdating(true);
+    try {
+      const updated = await assignTicket(ticket.id, assignedToUserID);
+      setTicket(updated);
+      toast.success("Ticket assigned successfully");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to assign ticket");
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   const loadTicket = async () => {
     setLoading(true);
@@ -483,6 +517,43 @@ export default function SupportTicketDetailPage() {
                 </div>
               </div>
 
+              <div>
+                <Label>Assign To</Label>
+                <div className="mt-2">
+                  <Select
+                    value={ticket.assignedTo || "unassigned"}
+                    onValueChange={(value) => {
+                      if (value !== "unassigned") {
+                        handleAssignTicket(value);
+                      }
+                    }}
+                    disabled={updating || loadingUsers}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder={loadingUsers ? "Loading..." : "Select admin user"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">
+                        <span className="text-muted-foreground">Unassigned</span>
+                      </SelectItem>
+                      {adminUsers.map((user) => (
+                        <SelectItem key={user.userId} value={user.userId}>
+                          {user.displayName || user.email} {user.email !== (user.displayName || "") ? `(${user.email})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {ticket.assignedToEmail && (
+                    <div className="mt-2 text-sm text-muted-foreground">
+                      Currently assigned to: <span className="font-medium">{ticket.assignedToEmail}</span>
+                      {ticket.assignedAt && (
+                        <span className="ml-2">({new Date(ticket.assignedAt).toLocaleDateString()})</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {ticket.subject && (
                 <div>
                   <Label>Subject</Label>
@@ -709,6 +780,43 @@ export default function SupportTicketDetailPage() {
                       <X className="h-4 w-4 mr-2" />
                       Close Ticket
                     </Button>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <Label>Assign To</Label>
+                <div className="mt-2 flex items-center gap-4">
+                  <Select
+                    value={ticket.assignedTo || "unassigned"}
+                    onValueChange={(value) => {
+                      if (value !== "unassigned") {
+                        handleAssignTicket(value);
+                      }
+                    }}
+                    disabled={updating || loadingUsers}
+                  >
+                    <SelectTrigger className="w-[300px]">
+                      <SelectValue placeholder={loadingUsers ? "Loading..." : "Select admin user"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">
+                        <span className="text-muted-foreground">Unassigned</span>
+                      </SelectItem>
+                      {adminUsers.map((user) => (
+                        <SelectItem key={user.userId} value={user.userId}>
+                          {user.displayName || user.email} {user.email !== (user.displayName || "") ? `(${user.email})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {ticket.assignedToEmail && (
+                    <div className="text-sm text-muted-foreground">
+                      Assigned to: <span className="font-medium">{ticket.assignedToEmail}</span>
+                      {ticket.assignedAt && (
+                        <span className="ml-2">({new Date(ticket.assignedAt).toLocaleDateString()})</span>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>

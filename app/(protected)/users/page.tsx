@@ -161,11 +161,18 @@ export default function UsersPage() {
           <div className="mb-4 md:mb-6">
             <Button
               variant="ghost"
-              onClick={() => router.push("/")}
+              onClick={() => {
+                const from = searchParams.get("from");
+                if (from === "recent-signups") {
+                  router.push("/recent-signups");
+                } else {
+                  router.push("/");
+                }
+              }}
               className="mb-3 md:mb-4"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Home
+              {searchParams.get("from") === "recent-signups" ? "Back to Recent Signups" : "Back to Home"}
             </Button>
           </div>
 

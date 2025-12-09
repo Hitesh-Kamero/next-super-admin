@@ -20,6 +20,9 @@ export interface SupportTicket {
   updatedAt: string;
   closedAt?: string;
   closedBy?: string;
+  assignedTo?: string;
+  assignedToEmail?: string;
+  assignedAt?: string;
 }
 
 export interface SupportTicketAttachment {
@@ -275,5 +278,55 @@ export async function getAdminPresignedUrl(
   }
 
   return response.json();
+}
+
+/**
+ * List all super admin users
+ */
+export async function listAdminUsers(): Promise<AdminUserInfo[]> {
+  const response = await authenticatedFetch(
+    `${API_BASE_URL}/admin/users/list`
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: "Failed to fetch admin users" }));
+    throw new Error(error.message || "Failed to fetch admin users");
+  }
+
+  const data = await response.json();
+  return data.users || [];
+}
+
+/**
+ * Assign a support ticket to an admin user
+ */
+export async function assignTicket(
+  ticketId: string,
+  assignedToUserID: string
+): Promise<SupportTicket> {
+  const response = await authenticatedFetch(
+    `${API_BASE_URL}/admin/support_tickets/${ticketId}/assign`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ assignedToUserID }),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: "Failed to assign ticket" }));
+    throw new Error(error.message || "Failed to assign ticket");
+  }
+
+  return response.json();
+}
+
+export interface AdminUserInfo {
+  userId: string;
+  email: string;
+  displayName?: string;
+  photoURL?: string;
 }
 

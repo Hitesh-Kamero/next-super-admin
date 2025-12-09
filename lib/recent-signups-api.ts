@@ -7,6 +7,7 @@ export interface RecentSignupEntry {
   userId: string;
   name?: string;
   phone?: string;
+  userType?: string;
   createdAt: string;
   isEndUser: boolean;
   isContacted: boolean;
