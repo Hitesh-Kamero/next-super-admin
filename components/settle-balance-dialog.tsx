@@ -134,7 +134,7 @@ export function SettleBalanceDialog({
       setUploading(true);
       let proofFileUrl: string;
       try {
-        proofFileUrl = await uploadFile(proofFile, "settlement_proof");
+        proofFileUrl = await uploadFile(proofFile, "payment_proof");
       } catch (error: any) {
         toast.error(error.message || "Failed to upload payment proof");
         setLoading(false);
@@ -369,5 +369,16 @@ export function SettleBalanceDialog({
     </Dialog>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
 
 

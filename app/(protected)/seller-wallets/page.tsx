@@ -174,7 +174,7 @@ export default function SellerWalletsPage() {
         </Card>
 
         {/* Wallets Table */}
-        <Card className="p-6">
+        <Card className="p-6 overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -185,8 +185,9 @@ export default function SellerWalletsPage() {
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <Table>
+              <div className="-mx-6 px-6 overflow-x-auto">
+                <div className="min-w-[800px]">
+                  <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Seller</TableHead>
@@ -266,14 +267,15 @@ export default function SellerWalletsPage() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </div>
 
               {/* Pagination */}
-              <div className="flex items-center justify-between mt-4">
-                <div className="text-sm text-muted-foreground">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
+                <div className="text-sm text-muted-foreground text-center sm:text-left">
                   Showing {offset + 1} to {Math.min(offset + limit, total)} of {total} wallets
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap justify-center">
                   <Button
                     variant="outline"
                     size="sm"
@@ -311,5 +313,16 @@ export default function SellerWalletsPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
