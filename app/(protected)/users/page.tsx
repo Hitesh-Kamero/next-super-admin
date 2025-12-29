@@ -11,8 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import { getUser, getUserWallet, type AdminUserDetails, type AdminUserWalletBalance } from "@/lib/users-api";
 import { UserEditDialog } from "@/components/user-edit-dialog";
 import { WalletUpdateDialog } from "@/components/wallet-update-dialog";
+import { UserRestoreDialog } from "@/components/user-restore-dialog";
 import { toast } from "sonner";
-import { Search, Loader2, Calendar, User, Mail, Phone, ArrowLeft, LogIn, Wallet, Pencil } from "lucide-react";
+import { Search, Loader2, Calendar, User, Mail, Phone, ArrowLeft, LogIn, Wallet, Pencil, RotateCcw } from "lucide-react";
 import { generateLoginAsUserUrl } from "@/lib/utils";
 
 export default function UsersPage() {
@@ -25,6 +26,7 @@ export default function UsersPage() {
   const [walletLoading, setWalletLoading] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [walletDialogOpen, setWalletDialogOpen] = useState(false);
+  const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
 
   // Auto-search if userId is provided in query params
   useEffect(() => {
@@ -130,6 +132,19 @@ export default function UsersPage() {
     }
   };
 
+  const handleRestoreSuccess = async () => {
+    // Refresh user data after successful restore
+    if (user) {
+      try {
+        const result = await getUser(user.id);
+        setUser(result);
+        toast.success("User data refreshed");
+      } catch (error: any) {
+        toast.error("Failed to refresh user data");
+      }
+    }
+  };
+
   const getPhoneVerificationBadgeVariant = (status?: string) => {
     switch (status) {
       case "verified":
@@ -230,14 +245,29 @@ export default function UsersPage() {
               <div className="md:hidden space-y-4">
                 <Card className="p-4">
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-semibold">
-                      {user.name || `${user.firstName || ""} ${user.lastName || ""}`.trim() || "User"}
-                    </h2>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xl font-semibold">
+                        {user.name || `${user.firstName || ""} ${user.lastName || ""}`.trim() || "User"}
+                      </h2>
+                      {user.isAccountSelfDeleted && (
+                        <Badge variant="destructive">Account Deleted</Badge>
+                      )}
+                    </div>
                     <div className="flex gap-2">
                       <Button size="sm" onClick={() => setEditDialogOpen(true)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      {user.email && (
+                      {user.isAccountSelfDeleted && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setRestoreDialogOpen(true)}
+                          className="text-orange-600 hover:text-orange-700"
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {user.email && !user.isAccountSelfDeleted && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -368,6 +398,17 @@ export default function UsersPage() {
                 <Card className="p-4">
                   <h3 className="font-semibold mb-3">Account Information</h3>
                   <div className="space-y-2 text-sm">
+                    {user.isAccountSelfDeleted && (
+                      <div>
+                        <span className="font-medium">Account Status: </span>
+                        <Badge variant="destructive">Deleted</Badge>
+                        {user.accountSelfDeletedAt && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Deleted at: {formatDate(user.accountSelfDeletedAt)}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {user.isEndUser !== undefined && (
                       <div>
                         <span className="font-medium">Is End User: </span>
@@ -474,15 +515,30 @@ export default function UsersPage() {
               <div className="hidden md:block">
                 <Card className="p-6">
                   <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-2xl font-semibold">
-                      {user.name || `${user.firstName || ""} ${user.lastName || ""}`.trim() || "User"}
-                    </h2>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-2xl font-semibold">
+                        {user.name || `${user.firstName || ""} ${user.lastName || ""}`.trim() || "User"}
+                      </h2>
+                      {user.isAccountSelfDeleted && (
+                        <Badge variant="destructive">Account Deleted</Badge>
+                      )}
+                    </div>
                     <div className="flex gap-2">
                       <Button onClick={() => setEditDialogOpen(true)}>
                         <Pencil className="h-4 w-4 mr-2" />
                         Edit User
                       </Button>
-                      {user.email && (
+                      {user.isAccountSelfDeleted && (
+                        <Button
+                          variant="outline"
+                          onClick={() => setRestoreDialogOpen(true)}
+                          className="text-orange-600 hover:text-orange-700"
+                        >
+                          <RotateCcw className="h-4 w-4 mr-2" />
+                          Restore Account
+                        </Button>
+                      )}
+                      {user.email && !user.isAccountSelfDeleted && (
                         <Button
                           variant="outline"
                           onClick={() => {
@@ -580,6 +636,17 @@ export default function UsersPage() {
                     <div>
                       <h3 className="font-semibold mb-3">Account Information</h3>
                       <div className="space-y-2 text-sm">
+                        {user.isAccountSelfDeleted && (
+                          <div>
+                            <span className="font-medium">Account Status: </span>
+                            <Badge variant="destructive">Deleted</Badge>
+                            {user.accountSelfDeletedAt && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                Deleted at: {formatDate(user.accountSelfDeletedAt)}
+                              </div>
+                            )}
+                          </div>
+                        )}
                         {user.isEndUser !== undefined && (
                           <div>
                             <span className="font-medium">Is End User: </span>
@@ -725,6 +792,14 @@ export default function UsersPage() {
               open={walletDialogOpen}
               onOpenChange={setWalletDialogOpen}
               onSuccess={handleWalletSuccess}
+            />
+          )}
+          {user && (
+            <UserRestoreDialog
+              user={user}
+              open={restoreDialogOpen}
+              onOpenChange={setRestoreDialogOpen}
+              onSuccess={handleRestoreSuccess}
             />
           )}
         </main>

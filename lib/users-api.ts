@@ -33,6 +33,8 @@ export interface AdminUserDetails {
   freeEnhancementsUsed?: number;
   freeEnhancementsLimit?: number;
   defaultSelfieId?: string;
+  isAccountSelfDeleted?: boolean;
+  accountSelfDeletedAt?: string;
 }
 
 export interface AdminUserWalletBalance {
@@ -158,3 +160,37 @@ export async function updateWallet(data: AdminWalletUpdateRequest): Promise<Admi
   return response.json();
 }
 
+export interface AdminUserRestoreRequest {
+  userId: string;
+  reason?: string;
+}
+
+export interface AdminUserRestoreResponse {
+  success: boolean;
+  userId: string;
+  message?: string;
+  restoredAt?: string;
+}
+
+/**
+ * Restore a deleted user account by super admin
+ */
+export async function restoreUserAccount(data: AdminUserRestoreRequest): Promise<AdminUserRestoreResponse> {
+  const response = await authenticatedFetch(
+    `${API_BASE_URL}/admin/users/restore`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: "Failed to restore account" }));
+    throw new Error(error.message || "Failed to restore account");
+  }
+
+  return response.json();
+}

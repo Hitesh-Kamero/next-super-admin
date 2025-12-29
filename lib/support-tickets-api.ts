@@ -329,4 +329,3 @@ export interface AdminUserInfo {
   displayName?: string;
   photoURL?: string;
 }
-
