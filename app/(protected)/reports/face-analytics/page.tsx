@@ -206,6 +206,46 @@ export default function FaceAnalyticsReportPage() {
                 </div>
               </Card>
 
+              {/* MTCNN Cost Savings - Highlighted */}
+              <Card className="p-4 border-l-4 border-l-green-500">
+                <div className="flex items-center gap-2 mb-3">
+                  <DollarSign className="h-4 w-4 text-green-500" />
+                  <h2 className="text-sm font-medium">MTCNN Cost Savings</h2>
+                </div>
+                <div className="grid grid-cols-5 gap-3">
+                  <div className="text-center p-3 bg-green-500/10 rounded-lg">
+                    <div className="text-2xl font-bold text-green-500">
+                      {formatNumber(report.awsCost?.photosSkippedByMTCNN)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Photos Skipped</div>
+                  </div>
+                  <div className="text-center p-3 bg-green-500/10 rounded-lg">
+                    <div className="text-xl font-semibold text-green-500">
+                      {formatNumber(report.awsCost?.mtcnnCostSaved)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Calls Saved</div>
+                  </div>
+                  <div className="text-center p-3 bg-green-500/10 rounded-lg">
+                    <div className="text-xl font-semibold text-green-500">
+                      ${report.awsCost?.estimatedCostSavedUSD?.toFixed(3) || "0.000"}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Cost Saved</div>
+                  </div>
+                  <div className="text-center p-3 bg-muted/50 rounded-lg">
+                    <div className="text-xl font-semibold">
+                      {formatNumber(report.awsCost?.mtcnnSuccessful)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">MTCNN Success</div>
+                  </div>
+                  <div className="text-center p-3 bg-muted/50 rounded-lg">
+                    <div className="text-xl font-semibold">
+                      {formatNumber(report.awsCost?.mtcnnFailed)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">MTCNN Failed</div>
+                  </div>
+                </div>
+              </Card>
+
               {/* Two Column Layout for Stats */}
               <div className="grid md:grid-cols-2 gap-4">
                 {/* Photo Indexing Stats */}
@@ -229,7 +269,7 @@ export default function FaceAnalyticsReportPage() {
                       )}
                     </Button>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-3 mb-3">
                     <div className="text-center p-3 bg-blue-500/10 rounded-lg">
                       <div className="text-2xl font-bold text-blue-500">
                         {formatNumber(report.photoIndexing?.totalPhotosIndexed)}
@@ -241,6 +281,27 @@ export default function FaceAnalyticsReportPage() {
                         {formatNumber(report.photoIndexing?.totalFacesDetected)}
                       </div>
                       <div className="text-xs text-muted-foreground">Faces</div>
+                    </div>
+                  </div>
+                  {/* MTCNN Stats */}
+                  <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-border/50">
+                    <div className="text-center p-2 bg-green-500/10 rounded-lg">
+                      <div className="text-lg font-semibold text-green-500">
+                        {formatNumber(report.photoIndexing?.photosSkippedByMTCNN)}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">Skipped</div>
+                    </div>
+                    <div className="text-center p-2 bg-muted/50 rounded-lg">
+                      <div className="text-lg font-semibold">
+                        {formatNumber(report.photoIndexing?.mtcnnSuccessful)}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">MTCNN OK</div>
+                    </div>
+                    <div className="text-center p-2 bg-muted/50 rounded-lg">
+                      <div className="text-lg font-semibold">
+                        {formatNumber(report.photoIndexing?.mtcnnFailed)}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">MTCNN Fail</div>
                     </div>
                   </div>
                 </Card>

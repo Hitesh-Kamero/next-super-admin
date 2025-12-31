@@ -7,11 +7,21 @@ export interface FaceAnalyticsReportAwsCost {
   photoIndexingImages: number;
   selfieSearchImages: number;
   freeOperations: number;
+  // MTCNN cost savings
+  photosSkippedByMTCNN: number;
+  mtcnnCostSaved: number;
+  estimatedCostSavedUSD: number;
+  mtcnnSuccessful: number;
+  mtcnnFailed: number;
 }
 
 export interface FaceAnalyticsReportPhotoIndexing {
   totalPhotosIndexed: number;
   totalFacesDetected: number;
+  // MTCNN stats
+  photosSkippedByMTCNN: number;
+  mtcnnSuccessful: number;
+  mtcnnFailed: number;
 }
 
 export interface FaceAnalyticsReportSelfieSearch {

@@ -170,9 +170,7 @@ export interface AdminUserRestoreResponse {
   userId: string;
   message?: string;
   restoredAt?: string;
-}
-
-/**
+}/**
  * Restore a deleted user account by super admin
  */
 export async function restoreUserAccount(data: AdminUserRestoreRequest): Promise<AdminUserRestoreResponse> {

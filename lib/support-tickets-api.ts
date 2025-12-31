@@ -295,9 +295,7 @@ export async function listAdminUsers(): Promise<AdminUserInfo[]> {
 
   const data = await response.json();
   return data.users || [];
-}
-
-/**
+}/**
  * Assign a support ticket to an admin user
  */
 export async function assignTicket(
