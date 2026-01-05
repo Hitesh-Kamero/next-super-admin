@@ -286,9 +286,7 @@ export async function getAdminPresignedUrl(
 export async function listAdminUsers(): Promise<AdminUserInfo[]> {
   const response = await authenticatedFetch(
     `${API_BASE_URL}/admin/users/list`
-  );
-
-  if (!response.ok) {
+  );  if (!response.ok) {
     const error = await response.json().catch(() => ({ message: "Failed to fetch admin users" }));
     throw new Error(error.message || "Failed to fetch admin users");
   }

@@ -169,6 +169,39 @@ export async function updateEvent(data: AdminEventUpdateRequest): Promise<AdminE
   return response.json();
 }
 
+export interface AdminEventRecoverRequest {
+  eventId: string;
+}
+
+export interface AdminEventRecoverResponse {
+  success: boolean;
+  eventId: string;
+  message?: string;
+}
+
+/**
+ * Recover an archived event by super admin
+ */
+export async function recoverEvent(data: AdminEventRecoverRequest): Promise<AdminEventRecoverResponse> {
+  const response = await authenticatedFetch(
+    `${API_BASE_URL}/admin/events/recover`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: "Failed to recover event" }));
+    throw new Error(error.message || "Failed to recover event");
+  }
+
+  return response.json();
+}
+
 export interface FTPCredentials {
   sftpHost: string;
   sftpPort: number;

@@ -8,11 +8,12 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { getEvent, type AdminEventDetails } from "@/lib/events-api";
+import { getEvent, recoverEvent, type AdminEventDetails } from "@/lib/events-api";
 import { EventEditDialog } from "@/components/event-edit-dialog";
 import { FTPCredentialsCard } from "@/components/ftp-credentials-card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Search, Loader2, Calendar, User, Hash, Tag, ArrowLeft, Lock, Pencil } from "lucide-react";
+import { Search, Loader2, Calendar, User, Hash, Tag, ArrowLeft, Lock, Pencil, RotateCcw } from "lucide-react";
 
 export default function EventsPage() {
   const router = useRouter();
@@ -21,6 +22,8 @@ export default function EventsPage() {
   const [loading, setLoading] = useState(false);
   const [event, setEvent] = useState<AdminEventDetails | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [recoverDialogOpen, setRecoverDialogOpen] = useState(false);
+  const [recovering, setRecovering] = useState(false);
 
   // Auto-search if eventId is provided in query params
   useEffect(() => {
@@ -86,6 +89,24 @@ export default function EventsPage() {
       } catch (error: any) {
         toast.error("Failed to refresh event data");
       }
+    }
+  };
+
+  const handleRecoverEvent = async () => {
+    if (!event) return;
+
+    setRecovering(true);
+    try {
+      await recoverEvent({ eventId: event.id });
+      toast.success("Event recovered successfully");
+      setRecoverDialogOpen(false);
+      // Refresh the event data
+      const result = await getEvent(event.id);
+      setEvent(result);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to recover event");
+    } finally {
+      setRecovering(false);
     }
   };
 
@@ -174,7 +195,23 @@ export default function EventsPage() {
               <div className="md:hidden space-y-4">
                 <Card className="p-4">
                   <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-semibold">{event.name}</h2>
+                    <div className="flex items-center gap-2 flex-1">
+                      <h2 className="text-xl font-semibold">{event.name}</h2>
+                      {event.isArchived && (
+                        <>
+                          <Badge variant="destructive">deleted</Badge>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setRecoverDialogOpen(true)}
+                            className="h-7 text-xs"
+                          >
+                            <RotateCcw className="h-3 w-3 mr-1" />
+                            Recover Event
+                          </Button>
+                        </>
+                      )}
+                    </div>
                     <Button size="sm" onClick={() => setEditDialogOpen(true)}>
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -368,7 +405,22 @@ export default function EventsPage() {
               <div className="hidden md:block">
                 <Card className="p-6">
                   <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-semibold">{event.name}</h2>
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-2xl font-semibold">{event.name}</h2>
+                      {event.isArchived && (
+                        <>
+                          <Badge variant="destructive">deleted</Badge>
+                          <Button
+                            variant="outline"
+                            onClick={() => setRecoverDialogOpen(true)}
+                            size="sm"
+                          >
+                            <RotateCcw className="h-4 w-4 mr-2" />
+                            Recover Event
+                          </Button>
+                        </>
+                      )}
+                    </div>
                     <Button onClick={() => setEditDialogOpen(true)}>
                       <Pencil className="h-4 w-4 mr-2" />
                       Edit Event
@@ -538,6 +590,48 @@ export default function EventsPage() {
               onSuccess={handleEditSuccess}
             />
           )}
+
+          {/* Recover Event Dialog */}
+          <Dialog open={recoverDialogOpen} onOpenChange={setRecoverDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Recover Archived Event</DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to recover this archived event?
+                </DialogDescription>
+              </DialogHeader>
+              <div className="py-4">
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                    <strong>Important:</strong> Only the event will be restored. Albums and photos that were deleted will <strong>NOT</strong> be restored.
+                  </p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setRecoverDialogOpen(false)}
+                  disabled={recovering}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleRecoverEvent}
+                  disabled={recovering}
+                  variant="default"
+                >
+                  {recovering ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Recovering...
+                    </>
+                  ) : (
+                    "Recover Event"
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </main>
       </div>
     </AuthGuard>

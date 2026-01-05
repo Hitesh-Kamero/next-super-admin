@@ -163,9 +163,7 @@ export async function updateWallet(data: AdminWalletUpdateRequest): Promise<Admi
 export interface AdminUserRestoreRequest {
   userId: string;
   reason?: string;
-}
-
-export interface AdminUserRestoreResponse {
+}export interface AdminUserRestoreResponse {
   success: boolean;
   userId: string;
   message?: string;
