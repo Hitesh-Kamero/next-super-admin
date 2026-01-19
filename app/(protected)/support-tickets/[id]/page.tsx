@@ -37,10 +37,19 @@ import {
 } from "@/lib/support-tickets-api";
 import { TicketActivityLog } from "@/components/ticket-activity-log";
 import { toast } from "sonner";
-import { ArrowLeft, MessageSquare, X, Loader2, Video, LogIn, Upload, FileImage, Paperclip, Ticket, Clock, CheckCircle2, AlertCircle, User, Send, Building2, ZoomIn, ZoomOut, RotateCw, Download, ChevronLeft, ChevronRight, Play, Pause, Volume2, VolumeX, Maximize, Minimize } from "lucide-react";
+import { ArrowLeft, MessageSquare, X, Loader2, Video, LogIn, Upload, FileImage, Paperclip, Ticket, Clock, CheckCircle2, AlertCircle, User, Send, Building2 } from "lucide-react";
 import Image from "next/image";
 import { formatDateIST, generateLoginAsUserUrl } from "@/lib/utils";
 import parsePhoneNumber from "libphonenumber-js";
+
+// Lightbox for image viewing
+import Lightbox from "yet-another-react-lightbox";
+import Zoom from "yet-another-react-lightbox/plugins/zoom";
+import Thumbnails from "yet-another-react-lightbox/plugins/thumbnails";
+import Download from "yet-another-react-lightbox/plugins/download";
+import Fullscreen from "yet-another-react-lightbox/plugins/fullscreen";
+import "yet-another-react-lightbox/styles.css";
+import "yet-another-react-lightbox/plugins/thumbnails.css";
 
 // Helper function to intelligently format phone number for WhatsApp using libphonenumber-js
 const formatPhoneNumberForWhatsApp = (phone: string): string => {
@@ -99,15 +108,14 @@ export default function SupportTicketDetailPage() {
   const [replyMessage, setReplyMessage] = useState("");
   const [updating, setUpdating] = useState(false);
   
-  // Media viewer state
-  const [mediaViewerOpen, setMediaViewerOpen] = useState(false);
-  const [mediaItems, setMediaItems] = useState<Array<{ url: string; type: "image" | "video"; fileName: string }>>([]);
-  const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
-  const [imageZoom, setImageZoom] = useState(1);
-  const [imageRotation, setImageRotation] = useState(0);
-  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
-  const [isVideoMuted, setIsVideoMuted] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  // Lightbox state for images
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  
+  // Video viewer state
+  const [videoViewerOpen, setVideoViewerOpen] = useState(false);
+  const [currentVideoUrl, setCurrentVideoUrl] = useState<string | null>(null);
+  const [currentVideoName, setCurrentVideoName] = useState<string>("");
   
   // File attachment state for admin replies
   const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
@@ -118,20 +126,19 @@ export default function SupportTicketDetailPage() {
   const [adminUsers, setAdminUsers] = useState<AdminUserInfo[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
 
-  // Collect all media items from ticket
-  const getAllMediaItems = () => {
+  // Collect all image items from ticket for lightbox
+  const getAllImageItems = () => {
     if (!ticket) return [];
-    const items: Array<{ url: string; type: "image" | "video"; fileName: string }> = [];
+    const items: Array<{ src: string; alt: string; downloadFilename: string }> = [];
     
     // Add ticket attachments
     ticket.attachments.forEach((att) => {
       const isImage = att.fileType === "screenshot" || att.contentType?.startsWith("image/");
-      const isVideo = att.fileType === "video" || att.contentType?.startsWith("video/");
-      if (isImage || isVideo) {
+      if (isImage) {
         items.push({
-          url: getFileUrl(att.storageKey),
-          type: isImage ? "image" : "video",
-          fileName: att.fileName,
+          src: getFileUrl(att.storageKey),
+          alt: att.fileName,
+          downloadFilename: att.fileName,
         });
       }
     });
@@ -140,12 +147,11 @@ export default function SupportTicketDetailPage() {
     ticket.replies.forEach((reply) => {
       reply.attachments.forEach((att) => {
         const isImage = att.fileType === "screenshot" || att.contentType?.startsWith("image/");
-        const isVideo = att.fileType === "video" || att.contentType?.startsWith("video/");
-        if (isImage || isVideo) {
+        if (isImage) {
           items.push({
-            url: getFileUrl(att.storageKey),
-            type: isImage ? "image" : "video",
-            fileName: att.fileName,
+            src: getFileUrl(att.storageKey),
+            alt: att.fileName,
+            downloadFilename: att.fileName,
           });
         }
       });
@@ -154,103 +160,21 @@ export default function SupportTicketDetailPage() {
     return items;
   };
 
-  // Open media viewer at specific URL
-  const openMediaViewer = (url: string) => {
-    const allMedia = getAllMediaItems();
-    const index = allMedia.findIndex((item) => item.url === url);
+  // Open lightbox at specific image URL
+  const openImageViewer = (url: string) => {
+    const allImages = getAllImageItems();
+    const index = allImages.findIndex((item) => item.src === url);
     if (index !== -1) {
-      setMediaItems(allMedia);
-      setCurrentMediaIndex(index);
-      setImageZoom(1);
-      setImageRotation(0);
-      setMediaViewerOpen(true);
+      setLightboxIndex(index);
+      setLightboxOpen(true);
     }
   };
 
-  // Media viewer navigation
-  const goToPrevMedia = () => {
-    setCurrentMediaIndex((prev) => (prev > 0 ? prev - 1 : mediaItems.length - 1));
-    setImageZoom(1);
-    setImageRotation(0);
-  };
-
-  const goToNextMedia = () => {
-    setCurrentMediaIndex((prev) => (prev < mediaItems.length - 1 ? prev + 1 : 0));
-    setImageZoom(1);
-    setImageRotation(0);
-  };
-
-  // Handle keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!mediaViewerOpen) return;
-      
-      switch (e.key) {
-        case "ArrowLeft":
-          goToPrevMedia();
-          break;
-        case "ArrowRight":
-          goToNextMedia();
-          break;
-        case "Escape":
-          setMediaViewerOpen(false);
-          break;
-        case "+":
-        case "=":
-          setImageZoom((z) => Math.min(z + 0.25, 3));
-          break;
-        case "-":
-          setImageZoom((z) => Math.max(z - 0.25, 0.5));
-          break;
-        case "r":
-          setImageRotation((r) => (r + 90) % 360);
-          break;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [mediaViewerOpen, mediaItems.length]);
-
-  // Download current media
-  const downloadCurrentMedia = async () => {
-    const currentMedia = mediaItems[currentMediaIndex];
-    if (!currentMedia) return;
-    
-    try {
-      const response = await fetch(currentMedia.url);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = currentMedia.fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      toast.error("Failed to download file");
-    }
-  };
-
-  // Toggle video play/pause
-  const toggleVideoPlay = () => {
-    if (videoRef.current) {
-      if (isVideoPlaying) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play();
-      }
-      setIsVideoPlaying(!isVideoPlaying);
-    }
-  };
-
-  // Toggle video mute
-  const toggleVideoMute = () => {
-    if (videoRef.current) {
-      videoRef.current.muted = !isVideoMuted;
-      setIsVideoMuted(!isVideoMuted);
-    }
+  // Open video viewer
+  const openVideoViewer = (url: string, fileName: string) => {
+    setCurrentVideoUrl(url);
+    setCurrentVideoName(fileName);
+    setVideoViewerOpen(true);
   };
 
   // Navigate back to list with preserved state
@@ -742,7 +666,11 @@ export default function SupportTicketDetailPage() {
                                 <div
                                   key={idx}
                                   className="relative group w-24 h-24 border-2 border-slate-200 dark:border-slate-600 rounded-xl overflow-hidden cursor-pointer hover:ring-2 hover:ring-primary/50 hover:scale-105 transition-all"
-                                  onClick={() => (isImage || isVideo) ? openMediaViewer(fileUrl) : window.open(fileUrl, '_blank')}
+                                  onClick={() => {
+                                    if (isImage) openImageViewer(fileUrl);
+                                    else if (isVideo) openVideoViewer(fileUrl, att.fileName);
+                                    else window.open(fileUrl, '_blank');
+                                  }}
                                 >
                                   {isImage ? (
                                     <Image src={fileUrl} alt={att.fileName} fill className="object-cover" sizes="96px" />
@@ -816,7 +744,11 @@ export default function SupportTicketDetailPage() {
                                       className={`w-20 h-20 rounded-xl overflow-hidden cursor-pointer hover:opacity-90 hover:scale-105 transition-all ${
                                         reply.from === "admin" ? "border-2 border-white/30" : "border-2 border-slate-200 dark:border-slate-600"
                                       }`}
-                                      onClick={() => (isImage || isVideo) ? openMediaViewer(fileUrl) : window.open(fileUrl, '_blank')}
+                                      onClick={() => {
+                                        if (isImage) openImageViewer(fileUrl);
+                                        else if (isVideo) openVideoViewer(fileUrl, att.fileName);
+                                        else window.open(fileUrl, '_blank');
+                                      }}
                                     >
                                       {isImage ? (
                                         <Image src={fileUrl} alt={att.fileName} width={80} height={80} className="object-cover w-full h-full" />
@@ -1066,196 +998,77 @@ export default function SupportTicketDetailPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Enhanced Media Viewer */}
-        {mediaViewerOpen && mediaItems.length > 0 && (
-          <Dialog open={mediaViewerOpen} onOpenChange={setMediaViewerOpen}>
-            <DialogContent className="max-w-[100vw] w-[100vw] max-h-[100vh] h-[100vh] p-0 bg-black/98 border-0 rounded-none">
-              <DialogTitle className="sr-only">Media Viewer</DialogTitle>
-              
-              {/* Top Bar */}
-              <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/80 to-transparent">
-                <div className="flex items-center gap-3">
-                  <span className="text-white/90 text-sm font-medium">
-                    {currentMediaIndex + 1} / {mediaItems.length}
-                  </span>
-                  <span className="text-white/60 text-sm truncate max-w-[300px]">
-                    {mediaItems[currentMediaIndex]?.fileName}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1">
-                  {mediaItems[currentMediaIndex]?.type === "image" && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-white/80 hover:text-white hover:bg-white/10 h-9 w-9"
-                        onClick={() => setImageZoom((z) => Math.max(z - 0.25, 0.5))}
-                        title="Zoom Out (-)"
-                      >
-                        <ZoomOut className="h-5 w-5" />
-                      </Button>
-                      <span className="text-white/60 text-xs w-12 text-center">{Math.round(imageZoom * 100)}%</span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-white/80 hover:text-white hover:bg-white/10 h-9 w-9"
-                        onClick={() => setImageZoom((z) => Math.min(z + 0.25, 3))}
-                        title="Zoom In (+)"
-                      >
-                        <ZoomIn className="h-5 w-5" />
-                      </Button>
-                      <div className="w-px h-6 bg-white/20 mx-2" />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-white/80 hover:text-white hover:bg-white/10 h-9 w-9"
-                        onClick={() => setImageRotation((r) => (r + 90) % 360)}
-                        title="Rotate (R)"
-                      >
-                        <RotateCw className="h-5 w-5" />
-                      </Button>
-                    </>
-                  )}
-                  {mediaItems[currentMediaIndex]?.type === "video" && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-white/80 hover:text-white hover:bg-white/10 h-9 w-9"
-                        onClick={toggleVideoPlay}
-                        title={isVideoPlaying ? "Pause" : "Play"}
-                      >
-                        {isVideoPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-white/80 hover:text-white hover:bg-white/10 h-9 w-9"
-                        onClick={toggleVideoMute}
-                        title={isVideoMuted ? "Unmute" : "Mute"}
-                      >
-                        {isVideoMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-                      </Button>
-                    </>
-                  )}
-                  <div className="w-px h-6 bg-white/20 mx-2" />
+        {/* Image Lightbox using yet-another-react-lightbox */}
+        <Lightbox
+          open={lightboxOpen}
+          close={() => setLightboxOpen(false)}
+          index={lightboxIndex}
+          slides={getAllImageItems()}
+          plugins={[Zoom, Thumbnails, Download, Fullscreen]}
+          zoom={{
+            maxZoomPixelRatio: 5,
+            zoomInMultiplier: 2,
+            doubleTapDelay: 300,
+            doubleClickDelay: 300,
+            doubleClickMaxStops: 2,
+            keyboardMoveDistance: 50,
+            wheelZoomDistanceFactor: 100,
+            pinchZoomDistanceFactor: 100,
+            scrollToZoom: true,
+          }}
+          thumbnails={{
+            position: "bottom",
+            width: 80,
+            height: 60,
+            border: 2,
+            borderRadius: 4,
+            padding: 4,
+            gap: 8,
+          }}
+          styles={{
+            container: { backgroundColor: "rgba(0, 0, 0, 0.95)" },
+          }}
+          carousel={{
+            finite: false,
+            preload: 2,
+          }}
+          animation={{
+            fade: 250,
+            swipe: 500,
+          }}
+        />
+
+        {/* Video Viewer Modal */}
+        {videoViewerOpen && currentVideoUrl && (
+          <Dialog open={videoViewerOpen} onOpenChange={setVideoViewerOpen}>
+            <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black border-0">
+              <DialogTitle className="sr-only">Video Player - {currentVideoName}</DialogTitle>
+              <div className="relative w-full flex flex-col">
+                {/* Header */}
+                <div className="flex items-center justify-between px-4 py-3 bg-black/80">
+                  <span className="text-white/80 text-sm truncate max-w-[80%]">{currentVideoName}</span>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="text-white/80 hover:text-white hover:bg-white/10 h-9 w-9"
-                    onClick={downloadCurrentMedia}
-                    title="Download"
-                  >
-                    <Download className="h-5 w-5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-white/80 hover:text-white hover:bg-white/10 h-9 w-9"
-                    onClick={() => setMediaViewerOpen(false)}
-                    title="Close (Esc)"
+                    className="text-white/80 hover:text-white hover:bg-white/10 h-8 w-8"
+                    onClick={() => setVideoViewerOpen(false)}
                   >
                     <X className="h-5 w-5" />
                   </Button>
                 </div>
-              </div>
-
-              {/* Navigation Arrows */}
-              {mediaItems.length > 1 && (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute left-4 top-1/2 -translate-y-1/2 z-20 text-white/80 hover:text-white hover:bg-white/10 h-12 w-12 rounded-full"
-                    onClick={goToPrevMedia}
-                    title="Previous (←)"
-                  >
-                    <ChevronLeft className="h-8 w-8" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-4 top-1/2 -translate-y-1/2 z-20 text-white/80 hover:text-white hover:bg-white/10 h-12 w-12 rounded-full"
-                    onClick={goToNextMedia}
-                    title="Next (→)"
-                  >
-                    <ChevronRight className="h-8 w-8" />
-                  </Button>
-                </>
-              )}
-
-              {/* Media Content */}
-              <div className="w-full h-full flex items-center justify-center p-16">
-                {mediaItems[currentMediaIndex]?.type === "image" ? (
-                  <div 
-                    className="relative max-w-full max-h-full transition-transform duration-200 ease-out"
-                    style={{
-                      transform: `scale(${imageZoom}) rotate(${imageRotation}deg)`,
-                    }}
-                  >
-                    <Image
-                      src={mediaItems[currentMediaIndex].url}
-                      alt={mediaItems[currentMediaIndex].fileName}
-                      width={1920}
-                      height={1080}
-                      className="max-w-[85vw] max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
-                      style={{ width: 'auto', height: 'auto' }}
-                      priority
-                    />
-                  </div>
-                ) : (
+                
+                {/* Video Player */}
+                <div className="flex items-center justify-center bg-black p-4">
                   <video
-                    ref={videoRef}
-                    src={mediaItems[currentMediaIndex]?.url}
+                    src={currentVideoUrl}
                     controls
                     autoPlay
-                    className="max-w-[90vw] max-h-[85vh] rounded-lg shadow-2xl"
-                    onPlay={() => setIsVideoPlaying(true)}
-                    onPause={() => setIsVideoPlaying(false)}
-                  />
-                )}
-              </div>
-
-              {/* Thumbnail Strip */}
-              {mediaItems.length > 1 && (
-                <div className="absolute bottom-0 left-0 right-0 z-20 px-4 py-3 bg-gradient-to-t from-black/80 to-transparent">
-                  <div className="flex items-center justify-center gap-2 overflow-x-auto pb-1">
-                    {mediaItems.map((item, index) => (
-                      <button
-                        key={index}
-                        onClick={() => {
-                          setCurrentMediaIndex(index);
-                          setImageZoom(1);
-                          setImageRotation(0);
-                        }}
-                        className={`relative w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 transition-all ${
-                          index === currentMediaIndex
-                            ? "ring-2 ring-white ring-offset-2 ring-offset-black scale-110"
-                            : "opacity-60 hover:opacity-100"
-                        }`}
-                      >
-                        {item.type === "image" ? (
-                          <Image
-                            src={item.url}
-                            alt={item.fileName}
-                            fill
-                            className="object-cover"
-                            sizes="64px"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-slate-800 flex items-center justify-center">
-                            <Video className="h-6 w-6 text-white/80" />
-                          </div>
-                        )}
-                      </button>
-                    ))}
-                  </div>
+                    className="max-w-full max-h-[80vh] rounded-lg"
+                    style={{ maxWidth: "90vw" }}
+                  >
+                    Your browser does not support the video tag.
+                  </video>
                 </div>
-              )}
-
-              {/* Keyboard Shortcuts Hint */}
-              <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10 text-white/40 text-xs hidden md:block">
-                ← → Navigate • + - Zoom • R Rotate • Esc Close
               </div>
             </DialogContent>
           </Dialog>
