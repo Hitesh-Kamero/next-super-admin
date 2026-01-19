@@ -181,12 +181,8 @@ export async function restoreUserAccount(data: AdminUserRestoreRequest): Promise
       },
       body: JSON.stringify(data),
     }
-  );
-
-  if (!response.ok) {
+  );  if (!response.ok) {
     const error = await response.json().catch(() => ({ message: "Failed to restore account" }));
     throw new Error(error.message || "Failed to restore account");
-  }
-
-  return response.json();
+  }  return response.json();
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { AuthGuard } from "@/components/auth-guard";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -37,7 +37,7 @@ import {
 } from "@/lib/support-tickets-api";
 import { TicketActivityLog } from "@/components/ticket-activity-log";
 import { toast } from "sonner";
-import { ArrowLeft, MessageSquare, X, Loader2, Video, Maximize2, LogIn, Upload, FileImage, Paperclip } from "lucide-react";
+import { ArrowLeft, MessageSquare, X, Loader2, Video, LogIn, Upload, FileImage, Paperclip, Ticket, Clock, CheckCircle2, AlertCircle, User, Send, Building2, ZoomIn, ZoomOut, RotateCw, Download, ChevronLeft, ChevronRight, Play, Pause, Volume2, VolumeX, Maximize, Minimize } from "lucide-react";
 import Image from "next/image";
 import { formatDateIST, generateLoginAsUserUrl } from "@/lib/utils";
 import parsePhoneNumber from "libphonenumber-js";
@@ -87,15 +87,27 @@ const formatPhoneNumberForWhatsApp = (phone: string): string => {
 export default function SupportTicketDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const ticketId = params.id as string;
+  
+  // Get return URL from query params (preserves list page state)
+  const returnUrl = searchParams.get("returnUrl") || "/support-tickets";
 
   const [ticket, setTicket] = useState<SupportTicket | null>(null);
   const [loading, setLoading] = useState(true);
   const [isReplyOpen, setIsReplyOpen] = useState(false);
   const [replyMessage, setReplyMessage] = useState("");
   const [updating, setUpdating] = useState(false);
-  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
-  const [fullScreenVideo, setFullScreenVideo] = useState<string | null>(null);
+  
+  // Media viewer state
+  const [mediaViewerOpen, setMediaViewerOpen] = useState(false);
+  const [mediaItems, setMediaItems] = useState<Array<{ url: string; type: "image" | "video"; fileName: string }>>([]);
+  const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
+  const [imageZoom, setImageZoom] = useState(1);
+  const [imageRotation, setImageRotation] = useState(0);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [isVideoMuted, setIsVideoMuted] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
   
   // File attachment state for admin replies
   const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
@@ -105,6 +117,146 @@ export default function SupportTicketDetailPage() {
   // Assignment state
   const [adminUsers, setAdminUsers] = useState<AdminUserInfo[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+
+  // Collect all media items from ticket
+  const getAllMediaItems = () => {
+    if (!ticket) return [];
+    const items: Array<{ url: string; type: "image" | "video"; fileName: string }> = [];
+    
+    // Add ticket attachments
+    ticket.attachments.forEach((att) => {
+      const isImage = att.fileType === "screenshot" || att.contentType?.startsWith("image/");
+      const isVideo = att.fileType === "video" || att.contentType?.startsWith("video/");
+      if (isImage || isVideo) {
+        items.push({
+          url: getFileUrl(att.storageKey),
+          type: isImage ? "image" : "video",
+          fileName: att.fileName,
+        });
+      }
+    });
+    
+    // Add reply attachments
+    ticket.replies.forEach((reply) => {
+      reply.attachments.forEach((att) => {
+        const isImage = att.fileType === "screenshot" || att.contentType?.startsWith("image/");
+        const isVideo = att.fileType === "video" || att.contentType?.startsWith("video/");
+        if (isImage || isVideo) {
+          items.push({
+            url: getFileUrl(att.storageKey),
+            type: isImage ? "image" : "video",
+            fileName: att.fileName,
+          });
+        }
+      });
+    });
+    
+    return items;
+  };
+
+  // Open media viewer at specific URL
+  const openMediaViewer = (url: string) => {
+    const allMedia = getAllMediaItems();
+    const index = allMedia.findIndex((item) => item.url === url);
+    if (index !== -1) {
+      setMediaItems(allMedia);
+      setCurrentMediaIndex(index);
+      setImageZoom(1);
+      setImageRotation(0);
+      setMediaViewerOpen(true);
+    }
+  };
+
+  // Media viewer navigation
+  const goToPrevMedia = () => {
+    setCurrentMediaIndex((prev) => (prev > 0 ? prev - 1 : mediaItems.length - 1));
+    setImageZoom(1);
+    setImageRotation(0);
+  };
+
+  const goToNextMedia = () => {
+    setCurrentMediaIndex((prev) => (prev < mediaItems.length - 1 ? prev + 1 : 0));
+    setImageZoom(1);
+    setImageRotation(0);
+  };
+
+  // Handle keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!mediaViewerOpen) return;
+      
+      switch (e.key) {
+        case "ArrowLeft":
+          goToPrevMedia();
+          break;
+        case "ArrowRight":
+          goToNextMedia();
+          break;
+        case "Escape":
+          setMediaViewerOpen(false);
+          break;
+        case "+":
+        case "=":
+          setImageZoom((z) => Math.min(z + 0.25, 3));
+          break;
+        case "-":
+          setImageZoom((z) => Math.max(z - 0.25, 0.5));
+          break;
+        case "r":
+          setImageRotation((r) => (r + 90) % 360);
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [mediaViewerOpen, mediaItems.length]);
+
+  // Download current media
+  const downloadCurrentMedia = async () => {
+    const currentMedia = mediaItems[currentMediaIndex];
+    if (!currentMedia) return;
+    
+    try {
+      const response = await fetch(currentMedia.url);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = currentMedia.fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error("Failed to download file");
+    }
+  };
+
+  // Toggle video play/pause
+  const toggleVideoPlay = () => {
+    if (videoRef.current) {
+      if (isVideoPlaying) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.play();
+      }
+      setIsVideoPlaying(!isVideoPlaying);
+    }
+  };
+
+  // Toggle video mute
+  const toggleVideoMute = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = !isVideoMuted;
+      setIsVideoMuted(!isVideoMuted);
+    }
+  };
+
+  // Navigate back to list with preserved state
+  const navigateBack = () => {
+    router.push(returnUrl);
+  };
 
   useEffect(() => {
     if (ticketId) {
@@ -146,7 +298,7 @@ export default function SupportTicketDetailPage() {
       setTicket(data);
     } catch (error: any) {
       toast.error(error.message || "Failed to load ticket");
-      router.push("/support-tickets");
+      navigateBack();
     } finally {
       setLoading(false);
     }
@@ -311,15 +463,40 @@ export default function SupportTicketDetailPage() {
   const getStatusBadgeStyle = (status: string) => {
     switch (status) {
       case "OPEN":
-        return "bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/30";
+        return "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30";
       case "IN_PROGRESS":
-        return "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-500/30";
+        return "bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/30";
       case "WAITING_FOR_USER":
-        return "bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-500/30";
+        return "bg-violet-500/20 text-violet-700 dark:text-violet-400 border-violet-500/30";
       case "CLOSED":
-        return "bg-gray-500/20 text-gray-700 dark:text-gray-400 border-gray-500/30";
+        return "bg-slate-500/20 text-slate-600 dark:text-slate-400 border-slate-500/30";
       default:
-        return "bg-gray-500/20 text-gray-700 dark:text-gray-400 border-gray-500/30";
+        return "bg-slate-500/20 text-slate-600 dark:text-slate-400 border-slate-500/30";
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "OPEN":
+        return <AlertCircle className="h-3.5 w-3.5" />;
+      case "IN_PROGRESS":
+        return <Clock className="h-3.5 w-3.5" />;
+      case "WAITING_FOR_USER":
+        return <MessageSquare className="h-3.5 w-3.5" />;
+      case "CLOSED":
+        return <CheckCircle2 className="h-3.5 w-3.5" />;
+      default:
+        return null;
+    }
+  };
+
+  const formatStatus = (status: string) => {
+    switch (status) {
+      case "OPEN": return "Open";
+      case "IN_PROGRESS": return "In Progress";
+      case "WAITING_FOR_USER": return "Waiting";
+      case "CLOSED": return "Closed";
+      default: return status;
     }
   };
 
@@ -342,7 +519,7 @@ export default function SupportTicketDetailPage() {
             <Button
               variant="outline"
               className="mt-4"
-              onClick={() => router.push("/support-tickets")}
+              onClick={navigateBack}
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Tickets
@@ -356,140 +533,125 @@ export default function SupportTicketDetailPage() {
   return (
     <AuthGuard>
       <div className="flex min-h-screen flex-col bg-background font-sans">
-        <main className="container mx-auto flex-1 px-4 py-4 md:py-8">
-          <div className="mb-4 md:mb-6">
-            <Button
-              variant="ghost"
-              onClick={() => router.push("/support-tickets")}
-              className="mb-3 md:mb-4"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Tickets
-            </Button>
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-              <div>
-                <h1 className="text-2xl md:text-3xl font-semibold">Ticket #{ticket.ticketNumber}</h1>
+        <main className="container mx-auto flex-1 px-4 py-4">
+          {/* Compact Header */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={navigateBack}
+                className="h-8 px-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Ticket className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-semibold">#{ticket.ticketNumber}</h1>
+                  <p className="text-xs text-muted-foreground">{formatDateIST(ticket.createdAt)}</p>
+                </div>
               </div>
             </div>
+            <Badge className={`${getStatusBadgeStyle(ticket.status)} border flex items-center gap-1.5 px-3 py-1`}>
+              {getStatusIcon(ticket.status)}
+              {formatStatus(ticket.status)}
+            </Badge>
           </div>
 
-          {/* User Details Section */}
-          <div className="mb-4 md:mb-6">
-            <Card className="p-4 md:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold">User Details</h2>
+          {/* Main Content Grid - Left sidebar, Right chat */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            {/* Left Column - User Details & Actions */}
+            <div className="lg:col-span-1 space-y-4 order-2 lg:order-1">
+              {/* User Details Card */}
+              <Card className="p-4 border-l-4 border-l-primary">
+                <h3 className="font-semibold flex items-center gap-2 mb-3 text-sm">
+                  <User className="h-4 w-4 text-primary" />
+                  User Details
+                </h3>
+                <div className="space-y-2.5 text-sm">
+                  <div>
+                    <span className="text-xs text-muted-foreground">Email</span>
+                    <p className="font-medium text-sm truncate">{ticket.userEmail}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-muted-foreground">Phone</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">{ticket.userMobile || "N/A"}</span>
+                      {ticket.userMobile && (
+                        <button
+                          onClick={() => {
+                            const phoneNumber = formatPhoneNumberForWhatsApp(ticket.userMobile);
+                            const message = encodeURIComponent(`Hi! This is Kamero support regarding ticket #${ticket.ticketNumber}`);
+                            window.open(`https://wa.me/${phoneNumber}?text=${message}`, '_blank');
+                          }}
+                          className="p-1 rounded hover:bg-green-50 dark:hover:bg-green-950/20"
+                          title="WhatsApp"
+                        >
+                          <img src="/icons/whatsapp-icon.svg" alt="WhatsApp" className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Building2 className="h-3 w-3" />
+                      Whitelabel
+                    </span>
+                    <p className="font-mono text-xs bg-muted/50 px-1.5 py-0.5 rounded inline-block">{ticket.whitelabelId}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-muted-foreground">User ID</span>
+                    <button
+                      onClick={() => router.push(`/users?userId=${encodeURIComponent(ticket.userId)}`)}
+                      className="block font-mono text-xs text-primary hover:underline truncate"
+                    >
+                      {ticket.userId.slice(0, 12)}...
+                    </button>
+                  </div>
+                  {ticket.eventDocID && (
+                    <div>
+                      <span className="text-xs text-muted-foreground">Event</span>
+                      <button
+                        onClick={() => router.push(`/events?eventId=${encodeURIComponent(ticket.eventDocID!)}`)}
+                        className="block text-xs text-primary hover:underline truncate"
+                      >
+                        {ticket.eventName || ticket.eventDocID}
+                      </button>
+                    </div>
+                  )}
+                </div>
                 {ticket.userEmail && (
                   <Button
                     variant="outline"
                     size="sm"
+                    className="w-full mt-3 h-8 text-xs"
                     onClick={() => {
-                      try {
-                        const loginUrl = generateLoginAsUserUrl(ticket.userEmail);
-                        window.open(loginUrl, '_blank', 'noopener,noreferrer');
-                        toast.success(
-                          <div className="space-y-2">
-                            <div>Opening login page in new tab</div>
-                            <div className="text-xs font-mono break-all bg-muted p-2 rounded mt-2">
-                              {loginUrl}
-                            </div>
-                          </div>,
-                          { duration: 10000 }
-                        );
-                      } catch (error: any) {
-                        toast.error(error.message || "Failed to generate login URL");
-                      }
+                      const loginUrl = generateLoginAsUserUrl(ticket.userEmail);
+                      window.open(loginUrl, '_blank');
+                      toast.success("Opening login page in new tab");
                     }}
                   >
-                    <LogIn className="h-4 w-4 mr-2" />
+                    <LogIn className="h-3 w-3 mr-1.5" />
                     Login as User
                   </Button>
                 )}
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">User ID</Label>
-                  <div className="mt-1">
-                    <button
-                      onClick={() => router.push(`/users?userId=${encodeURIComponent(ticket.userId)}`)}
-                      className="text-base font-mono text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline cursor-pointer"
-                    >
-                      {ticket.userId}
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Email</Label>
-                  <div className="mt-1 text-base">{ticket.userEmail}</div>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Contact Number</Label>
-                  <div className="mt-1 flex items-center gap-2">
-                    <span className="text-base">{ticket.userMobile || "Not provided"}</span>
-                    {ticket.userMobile && (
-                      <button
-                        onClick={() => {
-                          // Intelligently format phone number (detects existing country code)
-                          const phoneNumber = formatPhoneNumberForWhatsApp(ticket.userMobile);
-                          const message = encodeURIComponent(
-                            `I am from kamero support team and we have received your support ticket ${ticket.ticketNumber}`
-                          );
-                          const whatsappUrl = `https://wa.me/${phoneNumber}?text=${message}`;
-                          window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
-                        }}
-                        className="inline-flex items-center justify-center p-1.5 rounded-md hover:bg-green-50 dark:hover:bg-green-950/20 transition-colors"
-                        title="Send WhatsApp message"
-                        aria-label="Send WhatsApp message"
-                      >
-                        <img
-                          src="/icons/whatsapp-icon.svg"
-                          alt="WhatsApp"
-                          className="w-5 h-5"
-                        />
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {ticket.eventDocID && (
-                  <div>
-                    <Label className="text-sm font-medium text-muted-foreground">Event DocID</Label>
-                    <div className="mt-1">
-                      <button
-                        onClick={() => router.push(`/events?eventId=${encodeURIComponent(ticket.eventDocID!)}`)}
-                        className="text-base font-mono text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline cursor-pointer"
-                      >
-                        {ticket.eventDocID}
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {ticket.eventName && (
-                  <div>
-                    <Label className="text-sm font-medium text-muted-foreground">Event Name</Label>
-                    <div className="mt-1 text-base">{ticket.eventName}</div>
-                  </div>
-                )}
-              </div>
-            </Card>
-          </div>
+              </Card>
 
-          {/* Activity Log - Internal Only */}
-          <div className="mb-4 md:mb-6">
-            <TicketActivityLog ticketId={ticketId} />
-          </div>
-
-          {/* Mobile: No outer card wrapper */}
-          <div className="md:hidden space-y-4">
-            <div className="space-y-4">
-              <div>
-                <Label>Status</Label>
-                <div className="mt-2 flex flex-col gap-3">
-                  <div className="flex items-center gap-2">
+              {/* Actions Card */}
+              <Card className="p-4 border-l-4 border-l-amber-500">
+                <h3 className="font-semibold mb-3 text-sm">Actions</h3>
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Status</Label>
                     <Select
                       value={ticket.status}
                       onValueChange={handleStatusChange}
                       disabled={updating}
                     >
-                      <SelectTrigger className="flex-1">
+                      <SelectTrigger className="mt-1 h-9">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -499,511 +661,237 @@ export default function SupportTicketDetailPage() {
                         <SelectItem value="CLOSED">Closed</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Badge className={`${getStatusBadgeStyle(ticket.status)} border shrink-0`}>
-                      {ticket.status.replace("_", " ")}
-                    </Badge>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Assign To</Label>
+                    <Select
+                      value={ticket.assignedTo || "unassigned"}
+                      onValueChange={(value) => value !== "unassigned" && handleAssignTicket(value)}
+                      disabled={updating || loadingUsers}
+                    >
+                      <SelectTrigger className="mt-1 h-9">
+                        <SelectValue placeholder={loadingUsers ? "Loading..." : "Select"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
+                        {adminUsers.map((user) => (
+                          <SelectItem key={user.userId} value={user.userId}>
+                            {user.displayName || user.email}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {ticket.assignedToEmail && (
+                      <p className="text-xs text-muted-foreground mt-1 truncate">
+                        {ticket.assignedToEmail}
+                      </p>
+                    )}
                   </div>
                   {ticket.status !== "CLOSED" && (
                     <Button
                       variant="destructive"
+                      size="sm"
+                      className="w-full h-8 text-xs"
                       onClick={handleCloseTicket}
                       disabled={updating}
-                      className="w-full"
                     >
-                      <X className="h-4 w-4 mr-2" />
+                      <X className="h-3 w-3 mr-1.5" />
                       Close Ticket
                     </Button>
                   )}
                 </div>
-              </div>
+              </Card>
+            </div>
 
-              <div>
-                <Label>Assign To</Label>
-                <div className="mt-2">
-                  <Select
-                    value={ticket.assignedTo || "unassigned"}
-                    onValueChange={(value) => {
-                      if (value !== "unassigned") {
-                        handleAssignTicket(value);
-                      }
-                    }}
-                    disabled={updating || loadingUsers}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder={loadingUsers ? "Loading..." : "Select admin user"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unassigned">
-                        <span className="text-muted-foreground">Unassigned</span>
-                      </SelectItem>
-                      {adminUsers.map((user) => (
-                        <SelectItem key={user.userId} value={user.userId}>
-                          {user.displayName || user.email} {user.email !== (user.displayName || "") ? `(${user.email})` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {ticket.assignedToEmail && (
-                    <div className="mt-2 text-sm text-muted-foreground">
-                      Currently assigned to: <span className="font-medium">{ticket.assignedToEmail}</span>
-                      {ticket.assignedAt && (
-                        <span className="ml-2">({new Date(ticket.assignedAt).toLocaleDateString()})</span>
-                      )}
+            {/* Right Column - Chat & Activity Log */}
+            <div className="lg:col-span-3 space-y-4 order-1 lg:order-2">
+              {/* Chat Card - Enhanced ChatGPT-like UI */}
+              <Card className="flex flex-col overflow-hidden">
+                {/* Chat Header */}
+                <div className="px-4 py-3 border-b bg-gradient-to-r from-primary/5 to-transparent">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 text-primary" />
+                    {ticket.subject || "Support Conversation"}
+                  </h3>
+                </div>
+
+                {/* Chat Messages Area */}
+                <div className="flex-1 overflow-y-auto p-5 space-y-6 min-h-[350px] max-h-[550px] bg-gradient-to-b from-slate-50/30 to-white dark:from-slate-900/30 dark:to-slate-950">
+                  {/* Initial Ticket Message */}
+                  <div className="flex gap-4">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-sm">
+                      <User className="h-5 w-5 text-white" />
+                    </div>
+                    <div className="flex-1 max-w-[85%]">
+                      <div className="flex items-baseline gap-2 mb-2">
+                        <span className="font-semibold text-sm text-violet-700 dark:text-violet-400">
+                          {ticket.userEmail.split("@")[0]}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">{formatDateIST(ticket.createdAt)}</span>
+                      </div>
+                      <div className="bg-white dark:bg-slate-800 rounded-2xl rounded-tl-sm px-5 py-4 shadow-md border border-slate-200 dark:border-slate-700">
+                        <p className="text-[15px] leading-relaxed whitespace-pre-wrap text-slate-800 dark:text-slate-200">{ticket.description}</p>
+                        {ticket.attachments.length > 0 && (
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {ticket.attachments.map((att, idx) => {
+                              const fileUrl = getFileUrl(att.storageKey);
+                              const isImage = att.fileType === "screenshot" || (att.contentType?.startsWith("image/"));
+                              const isVideo = att.fileType === "video" || (att.contentType?.startsWith("video/"));
+                              
+                              return (
+                                <div
+                                  key={idx}
+                                  className="relative group w-24 h-24 border-2 border-slate-200 dark:border-slate-600 rounded-xl overflow-hidden cursor-pointer hover:ring-2 hover:ring-primary/50 hover:scale-105 transition-all"
+                                  onClick={() => (isImage || isVideo) ? openMediaViewer(fileUrl) : window.open(fileUrl, '_blank')}
+                                >
+                                  {isImage ? (
+                                    <Image src={fileUrl} alt={att.fileName} fill className="object-cover" sizes="96px" />
+                                  ) : isVideo ? (
+                                    <div className="w-full h-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+                                      <Video className="h-8 w-8 text-slate-500" />
+                                    </div>
+                                  ) : (
+                                    <div className="w-full h-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+                                      <FileImage className="h-8 w-8 text-slate-500" />
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Conversation Replies */}
+                  {ticket.replies.map((reply) => {
+                    // Get admin name from createdBy field (email) for admin replies
+                    const displayName = reply.from === "admin" 
+                      ? reply.createdBy?.split("@")[0] || "Support"
+                      : ticket.userEmail.split("@")[0];
+                    
+                    return (
+                      <div key={reply.id} className={`flex gap-4 ${reply.from === "admin" ? "flex-row-reverse" : ""}`}>
+                        <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center shadow-sm ${
+                          reply.from === "admin" 
+                            ? "bg-gradient-to-br from-emerald-500 to-teal-600" 
+                            : "bg-gradient-to-br from-violet-500 to-purple-600"
+                        }`}>
+                          {reply.from === "admin" ? (
+                            <MessageSquare className="h-5 w-5 text-white" />
+                          ) : (
+                            <User className="h-5 w-5 text-white" />
+                          )}
+                        </div>
+                        <div className={`flex-1 max-w-[85%] ${reply.from === "admin" ? "flex flex-col items-end" : ""}`}>
+                          <div className={`flex items-baseline gap-2 mb-2 ${reply.from === "admin" ? "flex-row-reverse" : ""}`}>
+                            <span className={`font-semibold text-sm ${
+                              reply.from === "admin" 
+                                ? "text-emerald-700 dark:text-emerald-400" 
+                                : "text-violet-700 dark:text-violet-400"
+                            }`}>
+                              {displayName}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">{formatDateIST(reply.createdAt)}</span>
+                          </div>
+                          <div className={`rounded-2xl px-5 py-4 shadow-md ${
+                            reply.from === "admin"
+                              ? "bg-gradient-to-br from-emerald-500 to-teal-600 text-white rounded-tr-sm"
+                              : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-tl-sm"
+                          }`}>
+                            <p className={`text-[15px] leading-relaxed whitespace-pre-wrap ${
+                              reply.from === "admin" ? "text-white" : "text-slate-800 dark:text-slate-200"
+                            }`}>{reply.message}</p>
+                            {reply.attachments.length > 0 && (
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {reply.attachments.map((att, idx) => {
+                                  const fileUrl = getFileUrl(att.storageKey);
+                                  const isImage = att.fileType === "screenshot" || (att.contentType?.startsWith("image/"));
+                                  const isVideo = att.fileType === "video" || (att.contentType?.startsWith("video/"));
+                                  
+                                  return (
+                                    <div
+                                      key={idx}
+                                      className={`w-20 h-20 rounded-xl overflow-hidden cursor-pointer hover:opacity-90 hover:scale-105 transition-all ${
+                                        reply.from === "admin" ? "border-2 border-white/30" : "border-2 border-slate-200 dark:border-slate-600"
+                                      }`}
+                                      onClick={() => (isImage || isVideo) ? openMediaViewer(fileUrl) : window.open(fileUrl, '_blank')}
+                                    >
+                                      {isImage ? (
+                                        <Image src={fileUrl} alt={att.fileName} width={80} height={80} className="object-cover w-full h-full" />
+                                      ) : (
+                                        <div className={`w-full h-full flex items-center justify-center ${
+                                          reply.from === "admin" ? "bg-white/20" : "bg-slate-100 dark:bg-slate-700"
+                                        }`}>
+                                          <Video className="h-5 w-5" />
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {ticket.replies.length === 0 && (
+                    <div className="text-center py-10">
+                      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 mb-4">
+                        <MessageSquare className="h-8 w-8 text-slate-400" />
+                      </div>
+                      <p className="text-sm text-muted-foreground font-medium">No replies yet</p>
+                      <p className="text-xs text-muted-foreground mt-1">Start the conversation by sending a reply</p>
                     </div>
                   )}
                 </div>
-              </div>
 
-              {ticket.subject && (
-                <div>
-                  <Label>Subject</Label>
-                  <div className="mt-2 text-base">{ticket.subject}</div>
-                </div>
-              )}
-
-              <div>
-                <Label>Description</Label>
-                <div className="mt-2 whitespace-pre-wrap text-base leading-relaxed">
-                  {ticket.description}
-                </div>
-              </div>
-
-              {ticket.eventName && (
-                <div>
-                  <Label>Related Event</Label>
-                  <div className="mt-2 text-base">{ticket.eventName}</div>
-                </div>
-              )}
-
-              {ticket.attachments.length > 0 && (
-                <div>
-                  <Label>Attachments</Label>
-                  <div className="mt-2 grid grid-cols-2 gap-3">
-                    {ticket.attachments.map((att, idx) => {
-                      const fileUrl = getFileUrl(att.storageKey);
-                      const isImage = att.fileType === "screenshot" || (att.contentType?.startsWith("image/"));
-                      const isVideo = att.fileType === "video" || (att.contentType?.startsWith("video/"));
-                      
-                      return (
-                        <div
-                          key={idx}
-                          className="relative group border rounded-lg overflow-hidden bg-muted/50 hover:bg-muted transition-colors"
-                        >
-                          {isImage ? (
-                            <div className="relative aspect-square cursor-pointer" onClick={() => setFullScreenImage(fileUrl)}>
-                              <Image
-                                src={fileUrl}
-                                alt={att.fileName}
-                                fill
-                                className="object-cover"
-                                sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                              />
-                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                                <Maximize2 className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                              </div>
-                            </div>
-                          ) : isVideo ? (
-                            <div className="relative aspect-square cursor-pointer" onClick={() => setFullScreenVideo(fileUrl)}>
-                              <video
-                                src={fileUrl}
-                                className="w-full h-full object-cover"
-                                muted
-                              />
-                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                                <div className="flex items-center gap-2">
-                                  <Video className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                  <Maximize2 className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="aspect-square flex items-center justify-center p-4">
-                              <a
-                                href={fileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm text-primary hover:underline text-center"
-                              >
-                                {att.fileName}
-                              </a>
-                            </div>
-                          )}
-                          <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs p-1 px-2 truncate">
-                            {att.fileName}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <div className="mb-2 flex items-center justify-between">
-                  <Label>Conversation</Label>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsReplyOpen(true)}
-                    disabled={ticket.status === "CLOSED"}
-                  >
-                    <MessageSquare className="h-4 w-4 mr-2" />
-                    Reply
-                  </Button>
-                </div>
-                <div className="space-y-4 rounded-lg border p-4 md:p-6">
-                  {ticket.replies.map((reply) => (
-                    <div
-                      key={reply.id}
-                      className={`rounded-lg p-4 md:p-5 border-2 ${
-                        reply.from === "admin"
-                          ? "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 md:ml-8"
-                          : "bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800 md:mr-8"
-                      }`}
-                    >
-                      <div className="mb-3 flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <Badge 
-                            className={
-                              reply.from === "admin"
-                                ? "bg-blue-600 text-white border-blue-700"
-                                : "bg-purple-600 text-white border-purple-700"
-                            }
-                          >
-                            {reply.from === "admin" ? "Support Team" : "User"}
-                          </Badge>
-                        </div>
-                        <span className="text-sm text-muted-foreground whitespace-nowrap">
-                          {formatDateIST(reply.createdAt)}
-                        </span>
-                      </div>
-                      <div className={`text-base leading-relaxed whitespace-pre-wrap ${
-                        reply.from === "admin" 
-                          ? "text-blue-900 dark:text-blue-100" 
-                          : "text-purple-900 dark:text-purple-100"
-                      }`}>
-                        {reply.message}
-                      </div>
-                      {reply.attachments.length > 0 && (
-                        <div className="mt-2 grid grid-cols-2 gap-2">
-                          {reply.attachments.map((att, idx) => {
-                            const fileUrl = getFileUrl(att.storageKey);
-                            const isImage = att.fileType === "screenshot" || (att.contentType?.startsWith("image/"));
-                            const isVideo = att.fileType === "video" || (att.contentType?.startsWith("video/"));
-                            
-                            return (
-                              <div
-                                key={idx}
-                                className="relative group border rounded overflow-hidden bg-muted/50 hover:bg-muted transition-colors"
-                              >
-                                {isImage ? (
-                                  <div className="relative aspect-square cursor-pointer" onClick={() => setFullScreenImage(fileUrl)}>
-                                    <Image
-                                      src={fileUrl}
-                                      alt={att.fileName}
-                                      fill
-                                      className="object-cover"
-                                      sizes="(max-width: 768px) 50vw, 33vw"
-                                    />
-                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                                      <Maximize2 className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                    </div>
-                                  </div>
-                                ) : isVideo ? (
-                                  <div className="relative aspect-square cursor-pointer" onClick={() => setFullScreenVideo(fileUrl)}>
-                                    <video
-                                      src={fileUrl}
-                                      className="w-full h-full object-cover"
-                                      muted
-                                    />
-                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                                      <div className="flex items-center gap-1">
-                                        <Video className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                        <Maximize2 className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                      </div>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="aspect-square flex items-center justify-center p-2">
-                                    <a
-                                      href={fileUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-xs text-primary hover:underline text-center"
-                                    >
-                                      {att.fileName}
-                                    </a>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                {/* Chat Input Area - ChatGPT Style */}
+                <div className="p-4 border-t bg-muted/30">
+                  {ticket.status === "CLOSED" ? (
+                    <div className="text-center py-2 text-sm text-muted-foreground">
+                      This ticket is closed. Reopen it to continue the conversation.
                     </div>
-                  ))}
+                  ) : (
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-10 w-10 shrink-0"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <Paperclip className="h-4 w-4" />
+                      </Button>
+                      <div 
+                        className="flex-1 min-h-[40px] px-4 py-2 bg-background border rounded-xl cursor-text flex items-center text-muted-foreground hover:border-primary/50 transition-colors"
+                        onClick={() => setIsReplyOpen(true)}
+                      >
+                        <span className="text-sm">Type your reply...</span>
+                      </div>
+                      <Button
+                        className="h-10 px-4 bg-primary hover:bg-primary/90"
+                        onClick={() => setIsReplyOpen(true)}
+                      >
+                        <Send className="h-4 w-4 mr-2" />
+                        Reply
+                      </Button>
+                    </div>
+                  )}
                 </div>
-              </div>
+              </Card>
+
+              {/* Activity Log - Below Chat */}
+              <Card className="p-4 border-l-4 border-l-slate-400">
+                <TicketActivityLog ticketId={ticketId} compact />
+              </Card>
             </div>
           </div>
-
-          {/* Desktop: Card wrapper */}
-          <Card className="hidden md:block p-6">
-            <div className="space-y-6">
-              <div>
-                <Label>Status</Label>
-                <div className="mt-2 flex items-center gap-4">
-                  <Select
-                    value={ticket.status}
-                    onValueChange={handleStatusChange}
-                    disabled={updating}
-                  >
-                    <SelectTrigger className="w-[200px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="OPEN">Open</SelectItem>
-                      <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-                      <SelectItem value="WAITING_FOR_USER">Waiting for User</SelectItem>
-                      <SelectItem value="CLOSED">Closed</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Badge className={`${getStatusBadgeStyle(ticket.status)} border`}>
-                    {ticket.status.replace("_", " ")}
-                  </Badge>
-                  {ticket.status !== "CLOSED" && (
-                    <Button
-                      variant="destructive"
-                      onClick={handleCloseTicket}
-                      disabled={updating}
-                    >
-                      <X className="h-4 w-4 mr-2" />
-                      Close Ticket
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <Label>Assign To</Label>
-                <div className="mt-2 flex items-center gap-4">
-                  <Select
-                    value={ticket.assignedTo || "unassigned"}
-                    onValueChange={(value) => {
-                      if (value !== "unassigned") {
-                        handleAssignTicket(value);
-                      }
-                    }}
-                    disabled={updating || loadingUsers}
-                  >
-                    <SelectTrigger className="w-[300px]">
-                      <SelectValue placeholder={loadingUsers ? "Loading..." : "Select admin user"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unassigned">
-                        <span className="text-muted-foreground">Unassigned</span>
-                      </SelectItem>
-                      {adminUsers.map((user) => (
-                        <SelectItem key={user.userId} value={user.userId}>
-                          {user.displayName || user.email} {user.email !== (user.displayName || "") ? `(${user.email})` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {ticket.assignedToEmail && (
-                    <div className="text-sm text-muted-foreground">
-                      Assigned to: <span className="font-medium">{ticket.assignedToEmail}</span>
-                      {ticket.assignedAt && (
-                        <span className="ml-2">({new Date(ticket.assignedAt).toLocaleDateString()})</span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {ticket.subject && (
-                <div>
-                  <Label>Subject</Label>
-                  <div className="mt-2 text-base">{ticket.subject}</div>
-                </div>
-              )}
-
-              <div>
-                <Label>Description</Label>
-                <div className="mt-2 whitespace-pre-wrap text-base leading-relaxed">
-                  {ticket.description}
-                </div>
-              </div>
-
-              {ticket.eventName && (
-                <div>
-                  <Label>Related Event</Label>
-                  <div className="mt-2 text-base">{ticket.eventName}</div>
-                </div>
-              )}
-
-              {ticket.attachments.length > 0 && (
-                <div>
-                  <Label>Attachments</Label>
-                  <div className="mt-2 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {ticket.attachments.map((att, idx) => {
-                      const fileUrl = getFileUrl(att.storageKey);
-                      const isImage = att.fileType === "screenshot" || (att.contentType?.startsWith("image/"));
-                      const isVideo = att.fileType === "video" || (att.contentType?.startsWith("video/"));
-                      
-                      return (
-                        <div
-                          key={idx}
-                          className="relative group border rounded-lg overflow-hidden bg-muted/50 hover:bg-muted transition-colors"
-                        >
-                          {isImage ? (
-                            <div className="relative aspect-square cursor-pointer" onClick={() => setFullScreenImage(fileUrl)}>
-                              <Image
-                                src={fileUrl}
-                                alt={att.fileName}
-                                fill
-                                className="object-cover"
-                                sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                              />
-                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                                <Maximize2 className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                              </div>
-                            </div>
-                          ) : isVideo ? (
-                            <div className="relative aspect-square cursor-pointer" onClick={() => setFullScreenVideo(fileUrl)}>
-                              <video
-                                src={fileUrl}
-                                className="w-full h-full object-cover"
-                                muted
-                              />
-                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                                <div className="flex items-center gap-2">
-                                  <Video className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                  <Maximize2 className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="aspect-square flex items-center justify-center p-4">
-                              <a
-                                href={fileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm text-primary hover:underline text-center"
-                              >
-                                {att.fileName}
-                              </a>
-                            </div>
-                          )}
-                          <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs p-1 px-2 truncate">
-                            {att.fileName}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <div className="mb-2 flex items-center justify-between">
-                  <Label>Conversation</Label>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsReplyOpen(true)}
-                    disabled={ticket.status === "CLOSED"}
-                  >
-                    <MessageSquare className="h-4 w-4 mr-2" />
-                    Reply
-                  </Button>
-                </div>
-                <div className="space-y-4 rounded-lg border p-4 md:p-6">
-                  {ticket.replies.map((reply) => (
-                    <div
-                      key={reply.id}
-                      className={`rounded-lg p-4 md:p-5 ${
-                        reply.from === "admin"
-                          ? "bg-primary/10 ml-8"
-                          : "bg-muted mr-8"
-                      }`}
-                    >
-                      <div className="mb-2 flex items-center justify-between">
-                        <span className="text-base font-semibold">
-                          {reply.from === "admin" ? "Support Team" : "User"}
-                        </span>
-                        <span className="text-sm text-muted-foreground">
-                          {formatDateIST(reply.createdAt)}
-                        </span>
-                      </div>
-                      <div className="text-base leading-relaxed whitespace-pre-wrap">
-                        {reply.message}
-                      </div>
-                      {reply.attachments.length > 0 && (
-                        <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
-                          {reply.attachments.map((att, idx) => {
-                            const fileUrl = getFileUrl(att.storageKey);
-                            const isImage = att.fileType === "screenshot" || (att.contentType?.startsWith("image/"));
-                            const isVideo = att.fileType === "video" || (att.contentType?.startsWith("video/"));
-                            
-                            return (
-                              <div
-                                key={idx}
-                                className="relative group border rounded overflow-hidden bg-muted/50 hover:bg-muted transition-colors"
-                              >
-                                {isImage ? (
-                                  <div className="relative aspect-square cursor-pointer" onClick={() => setFullScreenImage(fileUrl)}>
-                                    <Image
-                                      src={fileUrl}
-                                      alt={att.fileName}
-                                      fill
-                                      className="object-cover"
-                                      sizes="(max-width: 768px) 50vw, 33vw"
-                                    />
-                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                                      <Maximize2 className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                    </div>
-                                  </div>
-                                ) : isVideo ? (
-                                  <div className="relative aspect-square cursor-pointer" onClick={() => setFullScreenVideo(fileUrl)}>
-                                    <video
-                                      src={fileUrl}
-                                      className="w-full h-full object-cover"
-                                      muted
-                                    />
-                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                                      <div className="flex items-center gap-1">
-                                        <Video className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                        <Maximize2 className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                      </div>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="aspect-square flex items-center justify-center p-2">
-                                    <a
-                                      href={fileUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-xs text-primary hover:underline text-center"
-                                    >
-                                      {att.fileName}
-                                    </a>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </Card>
         </main>
 
-        {/* Reply Dialog */}
+        {/* Reply Dialog - Enhanced */}
         <Dialog open={isReplyOpen} onOpenChange={(open) => {
           setIsReplyOpen(open);
           if (!open) {
@@ -1011,34 +899,60 @@ export default function SupportTicketDetailPage() {
             clearAllAttachments();
           }
         }}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Reply to Ticket</DialogTitle>
-              <DialogDescription>
-                Your reply will be sent to the user and trigger an email notification.
-              </DialogDescription>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+            <DialogHeader className="pb-4 border-b">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600">
+                  <Send className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <DialogTitle className="text-xl">Reply to Ticket #{ticket.ticketNumber}</DialogTitle>
+                  <DialogDescription className="mt-1">
+                    Your reply will be sent to <span className="font-medium text-foreground">{ticket.userEmail}</span> via email
+                  </DialogDescription>
+                </div>
+              </div>
             </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="reply-message">Message</Label>
+            
+            <div className="flex-1 overflow-y-auto py-4 space-y-5">
+              {/* Message Input - Large Text Area */}
+              <div className="flex-1">
+                <Label htmlFor="reply-message" className="text-sm font-medium flex items-center gap-2 mb-2">
+                  <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                  Your Message
+                </Label>
                 <Textarea
                   id="reply-message"
                   value={replyMessage}
                   onChange={(e) => setReplyMessage(e.target.value)}
-                  placeholder="Enter your reply..."
-                  rows={6}
-                  className="mt-2"
+                  placeholder="Type your reply here... Be helpful and clear in your response."
+                  rows={14}
+                  className="resize-none text-[15px] leading-relaxed p-4 rounded-xl border-2 focus:border-primary/50 transition-colors min-h-[280px]"
+                  autoFocus
                 />
+                <div className="flex justify-between mt-2 text-xs text-muted-foreground">
+                  <span>Tip: Be clear and concise in your response</span>
+                  <span>{replyMessage.length} characters</span>
+                </div>
               </div>
               
-              {/* File Attachments Section */}
-              <div>
-                <Label className="flex items-center gap-2">
-                  <Paperclip className="h-4 w-4" />
-                  Attachments (Optional)
-                </Label>
-                <div className="text-xs text-muted-foreground mt-1 mb-2">
-                  Attach screenshots (up to 100MB) or videos (up to 1GB) to your reply.
+              {/* File Attachments Section - Compact */}
+              <div className="bg-muted/20 rounded-lg p-3 border border-dashed border-muted-foreground/20">
+                <div className="flex items-center justify-between">
+                  <Label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <Paperclip className="h-3.5 w-3.5" />
+                    Attachments (Optional)
+                  </Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="h-7 text-xs"
+                  >
+                    <Upload className="h-3 w-3 mr-1" />
+                    Add Files
+                  </Button>
                 </div>
                 
                 <input
@@ -1050,33 +964,21 @@ export default function SupportTicketDetailPage() {
                   className="hidden"
                 />
                 
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="mb-3"
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  Add Files
-                </Button>
-                
-                {/* Attachment Preview Grid */}
                 {replyAttachments.length > 0 && (
-                  <div className="border rounded-lg p-3 bg-muted/30">
+                  <div className="mt-2">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">{replyAttachments.length} file(s) selected</span>
-                      <Button
+                      <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                        {replyAttachments.length} file(s) ready
+                      </span>
+                      <button
                         type="button"
-                        variant="ghost"
-                        size="sm"
                         onClick={clearAllAttachments}
-                        className="text-xs text-muted-foreground hover:text-destructive"
+                        className="text-[10px] text-muted-foreground hover:text-destructive"
                       >
                         Clear All
-                      </Button>
+                      </button>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    <div className="flex flex-wrap gap-2">
                       {replyAttachments.map((file, index) => {
                         const isImage = file.type.startsWith("image/");
                         const isVideo = file.type.startsWith("video/");
@@ -1085,36 +987,28 @@ export default function SupportTicketDetailPage() {
                         return (
                           <div
                             key={index}
-                            className="relative group border rounded-lg overflow-hidden bg-background"
+                            className="relative group w-16 h-16 border rounded-lg overflow-hidden bg-background hover:border-primary/50 transition-colors"
                           >
                             {isImage ? (
-                              <div className="aspect-square relative">
-                                <img
-                                  src={previewUrl}
-                                  alt={file.name}
-                                  className="w-full h-full object-cover"
-                                  onLoad={() => URL.revokeObjectURL(previewUrl)}
-                                />
-                              </div>
+                              <img
+                                src={previewUrl}
+                                alt={file.name}
+                                className="w-full h-full object-cover"
+                                onLoad={() => URL.revokeObjectURL(previewUrl)}
+                              />
                             ) : isVideo ? (
-                              <div className="aspect-square relative flex items-center justify-center bg-black/10">
-                                <Video className="h-8 w-8 text-muted-foreground" />
+                              <div className="w-full h-full flex items-center justify-center bg-slate-100 dark:bg-slate-800">
+                                <Video className="h-6 w-6 text-muted-foreground" />
                               </div>
                             ) : (
-                              <div className="aspect-square relative flex items-center justify-center">
-                                <FileImage className="h-8 w-8 text-muted-foreground" />
+                              <div className="w-full h-full flex items-center justify-center bg-slate-100 dark:bg-slate-800">
+                                <FileImage className="h-6 w-6 text-muted-foreground" />
                               </div>
                             )}
-                            <div className="absolute inset-x-0 bottom-0 bg-black/70 text-white p-1.5">
-                              <div className="text-xs truncate">{file.name}</div>
-                              <div className="text-[10px] text-gray-300">
-                                {(file.size / (1024 * 1024)).toFixed(1)} MB
-                              </div>
-                            </div>
                             <button
                               type="button"
                               onClick={() => removeAttachment(index)}
-                              className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="absolute top-0.5 right-0.5 bg-red-500 hover:bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
                             >
                               <X className="h-3 w-3" />
                             </button>
@@ -1128,13 +1022,19 @@ export default function SupportTicketDetailPage() {
               
               {/* Upload Progress */}
               {uploadProgress && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {uploadProgress}
+                <div className="flex items-center gap-3 p-3 bg-primary/10 rounded-lg">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  <span className="text-sm font-medium">{uploadProgress}</span>
                 </div>
               )}
-              
-              <div className="flex justify-end gap-2">
+            </div>
+            
+            {/* Footer Actions */}
+            <div className="flex items-center justify-between pt-4 border-t">
+              <p className="text-xs text-muted-foreground">
+                Email notification will be sent automatically
+              </p>
+              <div className="flex gap-3">
                 <Button
                   variant="outline"
                   onClick={() => {
@@ -1142,17 +1042,22 @@ export default function SupportTicketDetailPage() {
                     setReplyMessage("");
                     clearAllAttachments();
                   }}
+                  className="px-6"
                 >
                   Cancel
                 </Button>
-                <Button onClick={handleReply} disabled={updating || !replyMessage.trim()}>
+                <Button 
+                  onClick={handleReply} 
+                  disabled={updating || !replyMessage.trim()}
+                  className="px-6 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700"
+                >
                   {updating ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   ) : (
-                    <MessageSquare className="h-4 w-4 mr-2" />
+                    <Send className="h-4 w-4 mr-2" />
                   )}
                   {replyAttachments.length > 0 
-                    ? `Send Reply with ${replyAttachments.length} file(s)`
+                    ? `Send with ${replyAttachments.length} file(s)`
                     : "Send Reply"
                   }
                 </Button>
@@ -1161,52 +1066,196 @@ export default function SupportTicketDetailPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Full Screen Image Viewer */}
-        {fullScreenImage && (
-          <Dialog open={!!fullScreenImage} onOpenChange={() => setFullScreenImage(null)}>
-            <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95">
-              <DialogTitle className="sr-only">Full Screen Image Preview</DialogTitle>
-              <div className="relative w-full h-[95vh] flex items-center justify-center">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute top-4 right-4 z-10 text-white hover:bg-white/20"
-                  onClick={() => setFullScreenImage(null)}
-                >
-                  <X className="h-6 w-6" />
-                </Button>
-                <Image
-                  src={fullScreenImage}
-                  alt="Full screen preview"
-                  fill
-                  className="object-contain"
-                  sizes="95vw"
-                />
+        {/* Enhanced Media Viewer */}
+        {mediaViewerOpen && mediaItems.length > 0 && (
+          <Dialog open={mediaViewerOpen} onOpenChange={setMediaViewerOpen}>
+            <DialogContent className="max-w-[100vw] w-[100vw] max-h-[100vh] h-[100vh] p-0 bg-black/98 border-0 rounded-none">
+              <DialogTitle className="sr-only">Media Viewer</DialogTitle>
+              
+              {/* Top Bar */}
+              <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/80 to-transparent">
+                <div className="flex items-center gap-3">
+                  <span className="text-white/90 text-sm font-medium">
+                    {currentMediaIndex + 1} / {mediaItems.length}
+                  </span>
+                  <span className="text-white/60 text-sm truncate max-w-[300px]">
+                    {mediaItems[currentMediaIndex]?.fileName}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  {mediaItems[currentMediaIndex]?.type === "image" && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-white/80 hover:text-white hover:bg-white/10 h-9 w-9"
+                        onClick={() => setImageZoom((z) => Math.max(z - 0.25, 0.5))}
+                        title="Zoom Out (-)"
+                      >
+                        <ZoomOut className="h-5 w-5" />
+                      </Button>
+                      <span className="text-white/60 text-xs w-12 text-center">{Math.round(imageZoom * 100)}%</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-white/80 hover:text-white hover:bg-white/10 h-9 w-9"
+                        onClick={() => setImageZoom((z) => Math.min(z + 0.25, 3))}
+                        title="Zoom In (+)"
+                      >
+                        <ZoomIn className="h-5 w-5" />
+                      </Button>
+                      <div className="w-px h-6 bg-white/20 mx-2" />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-white/80 hover:text-white hover:bg-white/10 h-9 w-9"
+                        onClick={() => setImageRotation((r) => (r + 90) % 360)}
+                        title="Rotate (R)"
+                      >
+                        <RotateCw className="h-5 w-5" />
+                      </Button>
+                    </>
+                  )}
+                  {mediaItems[currentMediaIndex]?.type === "video" && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-white/80 hover:text-white hover:bg-white/10 h-9 w-9"
+                        onClick={toggleVideoPlay}
+                        title={isVideoPlaying ? "Pause" : "Play"}
+                      >
+                        {isVideoPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-white/80 hover:text-white hover:bg-white/10 h-9 w-9"
+                        onClick={toggleVideoMute}
+                        title={isVideoMuted ? "Unmute" : "Mute"}
+                      >
+                        {isVideoMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+                      </Button>
+                    </>
+                  )}
+                  <div className="w-px h-6 bg-white/20 mx-2" />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-white/80 hover:text-white hover:bg-white/10 h-9 w-9"
+                    onClick={downloadCurrentMedia}
+                    title="Download"
+                  >
+                    <Download className="h-5 w-5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-white/80 hover:text-white hover:bg-white/10 h-9 w-9"
+                    onClick={() => setMediaViewerOpen(false)}
+                    title="Close (Esc)"
+                  >
+                    <X className="h-5 w-5" />
+                  </Button>
+                </div>
               </div>
-            </DialogContent>
-          </Dialog>
-        )}
 
-        {/* Full Screen Video Viewer */}
-        {fullScreenVideo && (
-          <Dialog open={!!fullScreenVideo} onOpenChange={() => setFullScreenVideo(null)}>
-            <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95">
-              <DialogTitle className="sr-only">Full Screen Video Preview</DialogTitle>
-              <div className="relative w-full h-[95vh] flex items-center justify-center">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute top-4 right-4 z-10 text-white hover:bg-white/20"
-                  onClick={() => setFullScreenVideo(null)}
-                >
-                  <X className="h-6 w-6" />
-                </Button>
-                <video
-                  src={fullScreenVideo}
-                  controls
-                  autoPlay
-                  className="max-w-full max-h-full"
-                />
+              {/* Navigation Arrows */}
+              {mediaItems.length > 1 && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute left-4 top-1/2 -translate-y-1/2 z-20 text-white/80 hover:text-white hover:bg-white/10 h-12 w-12 rounded-full"
+                    onClick={goToPrevMedia}
+                    title="Previous (←)"
+                  >
+                    <ChevronLeft className="h-8 w-8" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 z-20 text-white/80 hover:text-white hover:bg-white/10 h-12 w-12 rounded-full"
+                    onClick={goToNextMedia}
+                    title="Next (→)"
+                  >
+                    <ChevronRight className="h-8 w-8" />
+                  </Button>
+                </>
+              )}
+
+              {/* Media Content */}
+              <div className="w-full h-full flex items-center justify-center p-16">
+                {mediaItems[currentMediaIndex]?.type === "image" ? (
+                  <div 
+                    className="relative max-w-full max-h-full transition-transform duration-200 ease-out"
+                    style={{
+                      transform: `scale(${imageZoom}) rotate(${imageRotation}deg)`,
+                    }}
+                  >
+                    <Image
+                      src={mediaItems[currentMediaIndex].url}
+                      alt={mediaItems[currentMediaIndex].fileName}
+                      width={1920}
+                      height={1080}
+                      className="max-w-[85vw] max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
+                      style={{ width: 'auto', height: 'auto' }}
+                      priority
+                    />
+                  </div>
+                ) : (
+                  <video
+                    ref={videoRef}
+                    src={mediaItems[currentMediaIndex]?.url}
+                    controls
+                    autoPlay
+                    className="max-w-[90vw] max-h-[85vh] rounded-lg shadow-2xl"
+                    onPlay={() => setIsVideoPlaying(true)}
+                    onPause={() => setIsVideoPlaying(false)}
+                  />
+                )}
+              </div>
+
+              {/* Thumbnail Strip */}
+              {mediaItems.length > 1 && (
+                <div className="absolute bottom-0 left-0 right-0 z-20 px-4 py-3 bg-gradient-to-t from-black/80 to-transparent">
+                  <div className="flex items-center justify-center gap-2 overflow-x-auto pb-1">
+                    {mediaItems.map((item, index) => (
+                      <button
+                        key={index}
+                        onClick={() => {
+                          setCurrentMediaIndex(index);
+                          setImageZoom(1);
+                          setImageRotation(0);
+                        }}
+                        className={`relative w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 transition-all ${
+                          index === currentMediaIndex
+                            ? "ring-2 ring-white ring-offset-2 ring-offset-black scale-110"
+                            : "opacity-60 hover:opacity-100"
+                        }`}
+                      >
+                        {item.type === "image" ? (
+                          <Image
+                            src={item.url}
+                            alt={item.fileName}
+                            fill
+                            className="object-cover"
+                            sizes="64px"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-slate-800 flex items-center justify-center">
+                            <Video className="h-6 w-6 text-white/80" />
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Keyboard Shortcuts Hint */}
+              <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10 text-white/40 text-xs hidden md:block">
+                ← → Navigate • + - Zoom • R Rotate • Esc Close
               </div>
             </DialogContent>
           </Dialog>

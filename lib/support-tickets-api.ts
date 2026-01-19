@@ -87,14 +87,15 @@ export interface TicketActivityListResponse {
 }
 
 /**
- * Get all support tickets with pagination, optional status filter, and sorting
+ * Get all support tickets with pagination, optional status filter, sorting, and assignment filter
  */
 export async function getAllSupportTickets(
   skip: number = 0,
   limit: number = 20,
   status?: "OPEN" | "IN_PROGRESS" | "WAITING_FOR_USER" | "CLOSED",
   sortBy?: "createdAt" | "updatedAt" | "ticketNumber" | "status",
-  sortOrder?: "asc" | "desc"
+  sortOrder?: "asc" | "desc",
+  assignedTo?: string // Use "me" to get tickets assigned to current user
 ): Promise<SupportTicketsListResponse> {
   const params = new URLSearchParams({
     skip: skip.toString(),
@@ -108,6 +109,9 @@ export async function getAllSupportTickets(
   }
   if (sortOrder) {
     params.append("sortOrder", sortOrder);
+  }
+  if (assignedTo) {
+    params.append("assignedTo", assignedTo);
   }
 
   const response = await authenticatedFetch(
@@ -289,9 +293,7 @@ export async function listAdminUsers(): Promise<AdminUserInfo[]> {
   );  if (!response.ok) {
     const error = await response.json().catch(() => ({ message: "Failed to fetch admin users" }));
     throw new Error(error.message || "Failed to fetch admin users");
-  }
-
-  const data = await response.json();
+  }  const data = await response.json();
   return data.users || [];
 }/**
  * Assign a support ticket to an admin user
@@ -309,17 +311,11 @@ export async function assignTicket(
       },
       body: JSON.stringify({ assignedToUserID }),
     }
-  );
-
-  if (!response.ok) {
+  );  if (!response.ok) {
     const error = await response.json().catch(() => ({ message: "Failed to assign ticket" }));
     throw new Error(error.message || "Failed to assign ticket");
-  }
-
-  return response.json();
-}
-
-export interface AdminUserInfo {
+  }  return response.json();
+}export interface AdminUserInfo {
   userId: string;
   email: string;
   displayName?: string;
