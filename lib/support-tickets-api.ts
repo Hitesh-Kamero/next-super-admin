@@ -95,7 +95,8 @@ export async function getAllSupportTickets(
   status?: "OPEN" | "IN_PROGRESS" | "WAITING_FOR_USER" | "CLOSED",
   sortBy?: "createdAt" | "updatedAt" | "ticketNumber" | "status",
   sortOrder?: "asc" | "desc",
-  assignedTo?: string // Use "me" to get tickets assigned to current user
+  assignedTo?: string, // Use "me" to get tickets assigned to current user
+  excludeClosed?: boolean // If true, excludes CLOSED tickets from results
 ): Promise<SupportTicketsListResponse> {
   const params = new URLSearchParams({
     skip: skip.toString(),
@@ -112,6 +113,9 @@ export async function getAllSupportTickets(
   }
   if (assignedTo) {
     params.append("assignedTo", assignedTo);
+  }
+  if (excludeClosed !== undefined) {
+    params.append("excludeClosed", excludeClosed.toString());
   }
 
   const response = await authenticatedFetch(

@@ -33,14 +33,14 @@ import {
   type SupportTicketsListResponse,
 } from "@/lib/support-tickets-api";
 import { toast } from "sonner";
-import { Loader2, ArrowUpDown, ArrowUp, ArrowDown, User, Users, Ticket, MessageSquare, Clock, CheckCircle2, AlertCircle, UserCheck } from "lucide-react";
+import { Loader2, ArrowUpDown, ArrowUp, ArrowDown, User, Users, Ticket, MessageSquare, Clock, CheckCircle2, AlertCircle, UserCheck, Archive } from "lucide-react";
 import { formatDateOnlyIST } from "@/lib/utils";
 
 const ITEMS_PER_PAGE = 20;
 
 type SortField = "createdAt" | "updatedAt" | "ticketNumber" | "status";
 type SortOrder = "asc" | "desc";
-type TabValue = "assigned" | "all";
+type TabValue = "assigned" | "all" | "closed";
 
 export default function SupportTicketsPage() {
   const router = useRouter();
@@ -49,7 +49,9 @@ export default function SupportTicketsPage() {
   // Read initial state from URL parameters
   const getInitialTab = (): TabValue => {
     const tab = searchParams.get("tab");
-    return tab === "all" ? "all" : "assigned";
+    if (tab === "all") return "all";
+    if (tab === "closed") return "closed";
+    return "assigned";
   };
   
   const getInitialPage = (): number => {
@@ -88,6 +90,7 @@ export default function SupportTicketsPage() {
   // Counts for tab badges
   const [assignedCount, setAssignedCount] = useState<number>(0);
   const [allCount, setAllCount] = useState<number>(0);
+  const [closedCount, setClosedCount] = useState<number>(0);
 
   // Update URL when state changes
   const updateURL = useCallback((
@@ -138,17 +141,39 @@ export default function SupportTicketsPage() {
   ) => {
     setLoading(true);
     try {
-      // Determine assignedTo filter based on tab
-      const assignedTo = tab === "assigned" ? "me" : undefined;
+      // Determine filters based on tab
+      let assignedTo: string | undefined;
+      let statusToUse: string | undefined;
+      let excludeClosed = false;
+      
+      if (tab === "assigned") {
+        assignedTo = "me";
+        // For assigned tab, exclude closed tickets at database level
+        excludeClosed = true;
+        if (status && status !== "all") {
+          statusToUse = status;
+        }
+      } else if (tab === "closed") {
+        // Closed tab always shows CLOSED status
+        statusToUse = "CLOSED";
+      } else {
+        // All tab - exclude closed tickets at database level
+        excludeClosed = true;
+        if (status && status !== "all") {
+          statusToUse = status;
+        }
+      }
       
       const response: SupportTicketsListResponse = await getAllSupportTickets(
         page * ITEMS_PER_PAGE,
         ITEMS_PER_PAGE,
-        status && status !== "all" ? (status as any) : undefined,
+        statusToUse as any,
         sortByField,
         sortOrderValue,
-        assignedTo
+        assignedTo,
+        excludeClosed
       );
+      
       setTickets(response.tickets || []);
       setTotalCount(response.totalCount);
       setHasMore(response.hasMore);
@@ -156,6 +181,8 @@ export default function SupportTicketsPage() {
       // Update count for current tab
       if (tab === "assigned") {
         setAssignedCount(response.totalCount);
+      } else if (tab === "closed") {
+        setClosedCount(response.totalCount);
       } else {
         setAllCount(response.totalCount);
       }
@@ -166,16 +193,20 @@ export default function SupportTicketsPage() {
     }
   };
 
-  // Load counts for both tabs on initial mount
+  // Load counts for all tabs on initial mount
   const loadCounts = async () => {
     try {
-      // Get assigned count
-      const assignedResponse = await getAllSupportTickets(0, 1, undefined, undefined, undefined, "me");
+      // Get assigned count (excluding closed at database level)
+      const assignedResponse = await getAllSupportTickets(0, 1, undefined, undefined, undefined, "me", true);
       setAssignedCount(assignedResponse.totalCount);
 
-      // Get all count
-      const allResponse = await getAllSupportTickets(0, 1, undefined, undefined, undefined, undefined);
+      // Get all count (excluding closed at database level)
+      const allResponse = await getAllSupportTickets(0, 1, undefined, undefined, undefined, undefined, true);
       setAllCount(allResponse.totalCount);
+
+      // Get closed count
+      const closedResponse = await getAllSupportTickets(0, 1, "CLOSED" as any, undefined, undefined, undefined, false);
+      setClosedCount(closedResponse.totalCount);
     } catch (error) {
       // Silently fail - counts are not critical
     }
@@ -389,23 +420,30 @@ export default function SupportTicketsPage() {
   );
 
   // Render empty state
-  const renderEmptyState = () => (
-    <div className="py-16 text-center">
-      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
-        <Ticket className="h-8 w-8 text-muted-foreground" />
+  const renderEmptyState = () => {
+    let title = "No support tickets found";
+    let description = "There are no support tickets matching your current filters.";
+    let icon = <Ticket className="h-8 w-8 text-muted-foreground" />;
+    
+    if (activeTab === "assigned") {
+      title = "No tickets assigned to you";
+      description = "When tickets are assigned to you, they will appear here.";
+    } else if (activeTab === "closed") {
+      title = "No closed tickets";
+      description = "Closed tickets will appear here once tickets are resolved.";
+      icon = <Archive className="h-8 w-8 text-muted-foreground" />;
+    }
+    
+    return (
+      <div className="py-16 text-center">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
+          {icon}
+        </div>
+        <h3 className="text-lg font-medium mb-2">{title}</h3>
+        <p className="text-muted-foreground text-sm max-w-sm mx-auto">{description}</p>
       </div>
-      <h3 className="text-lg font-medium mb-2">
-        {activeTab === "assigned" 
-          ? "No tickets assigned to you" 
-          : "No support tickets found"}
-      </h3>
-      <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-        {activeTab === "assigned" 
-          ? "When tickets are assigned to you, they will appear here." 
-          : "There are no support tickets matching your current filters."}
-      </p>
-    </div>
-  );
+    );
+  };
 
   // Render loading state
   const renderLoading = () => (
@@ -444,20 +482,26 @@ export default function SupportTicketsPage() {
   );
 
   // Render status filter
-  const renderStatusFilter = () => (
-    <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
-      <SelectTrigger className="w-[180px]">
-        <SelectValue placeholder="Filter by status" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all">All Status</SelectItem>
-        <SelectItem value="OPEN">Open</SelectItem>
-        <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-        <SelectItem value="WAITING_FOR_USER">Waiting for User</SelectItem>
-        <SelectItem value="CLOSED">Closed</SelectItem>
-      </SelectContent>
-    </Select>
-  );
+  const renderStatusFilter = () => {
+    // Hide status filter on closed tab since it's already filtered
+    if (activeTab === "closed") {
+      return null;
+    }
+    
+    return (
+      <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
+        <SelectTrigger className="w-[180px]">
+          <SelectValue placeholder="Filter by status" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All Status</SelectItem>
+          <SelectItem value="OPEN">Open</SelectItem>
+          <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+          <SelectItem value="WAITING_FOR_USER">Waiting for User</SelectItem>
+        </SelectContent>
+      </Select>
+    );
+  };
 
   return (
     <AuthGuard>
@@ -474,7 +518,7 @@ export default function SupportTicketsPage() {
                   </div>
                   <h1 className="text-2xl font-semibold">Support Tickets</h1>
                 </div>
-                <TabsList className="hidden sm:grid grid-cols-2 bg-muted/50">
+                <TabsList className="hidden sm:grid grid-cols-3 bg-muted/50">
                   <TabsTrigger value="assigned" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                     <User className="h-4 w-4" />
                     <span>Assigned to Me</span>
@@ -493,6 +537,15 @@ export default function SupportTicketsPage() {
                       </Badge>
                     )}
                   </TabsTrigger>
+                  <TabsTrigger value="closed" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                    <Archive className="h-4 w-4" />
+                    <span>Closed</span>
+                    {closedCount > 0 && (
+                      <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs bg-background/50">
+                        {closedCount}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
                 </TabsList>
               </div>
               
@@ -503,22 +556,31 @@ export default function SupportTicketsPage() {
             </div>
 
             {/* Mobile Tabs - shown below title on small screens */}
-            <TabsList className="grid w-full grid-cols-2 sm:hidden mb-4 bg-muted/50">
-              <TabsTrigger value="assigned" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <User className="h-4 w-4" />
-                <span>Assigned to Me</span>
+            <TabsList className="grid w-full grid-cols-3 sm:hidden mb-4 bg-muted/50">
+              <TabsTrigger value="assigned" className="flex items-center gap-1.5 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <User className="h-3.5 w-3.5" />
+                <span>Mine</span>
                 {assignedCount > 0 && (
-                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                  <Badge variant="secondary" className="ml-0.5 h-4 px-1 text-[10px]">
                     {assignedCount}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="all" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <Users className="h-4 w-4" />
-                <span>All Tickets</span>
+              <TabsTrigger value="all" className="flex items-center gap-1.5 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Users className="h-3.5 w-3.5" />
+                <span>All</span>
                 {allCount > 0 && (
-                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                  <Badge variant="secondary" className="ml-0.5 h-4 px-1 text-[10px]">
                     {allCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="closed" className="flex items-center gap-1.5 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Archive className="h-3.5 w-3.5" />
+                <span>Closed</span>
+                {closedCount > 0 && (
+                  <Badge variant="secondary" className="ml-0.5 h-4 px-1 text-[10px]">
+                    {closedCount}
                   </Badge>
                 )}
               </TabsTrigger>
