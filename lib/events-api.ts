@@ -202,55 +202,41 @@ export async function recoverEvent(data: AdminEventRecoverRequest): Promise<Admi
   return response.json();
 }
 
-export interface FTPCredentials {
-  sftpHost: string;
-  sftpPort: number;
-  ftpHost: string;
-  ftpPort: number;
-  username: string;
-  password: string;
-  instructions: string;
-  ftpUploadCount?: number;
-  ftpCreatedAt?: string;
+
+
+export interface ConvertEventToSubscriptionRequest {
+  eventId: string;
+  subscriptionId?: string;
+}
+
+export interface ConvertEventToSubscriptionResponse {
+  success: boolean;
+  eventId: string;
+  subscriptionId?: string;
+  message?: string;
 }
 
 /**
- * Get FTP/SFTP credentials for an event
+ * Convert a pack-based event to subscription-based
  */
-export async function getEventFTPCredentials(eventDocId: string): Promise<FTPCredentials> {
+export async function convertEventToSubscription(
+  data: ConvertEventToSubscriptionRequest
+): Promise<ConvertEventToSubscriptionResponse> {
   const response = await authenticatedFetch(
-    `${API_BASE_URL}/admin/events/${eventDocId}/ftp/credentials`
+    `${API_BASE_URL}/admin/events/convert-to-subscription`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    }
   );
 
   if (!response.ok) {
-    if (response.status === 400) {
-      const error = await response.json().catch(() => ({ message: "FTP is not enabled for this event" }));
-      throw new Error(error.message || "FTP is not enabled for this event");
-    }
-    const error = await response.json().catch(() => ({ message: "Failed to get FTP credentials" }));
-    throw new Error(error.message || "Failed to get FTP credentials");
+    const error = await response.json().catch(() => ({ message: "Failed to convert event" }));
+    throw new Error(error.message || "Failed to convert event to subscription");
   }
 
-  const data = await response.json();
-  
-  // Transform API response to match component expectations
-  // API returns SFTP credentials, but component needs both SFTP and FTP
-  const sftpHost = data.host || "sftp.kamero.ai";
-  const sftpPort = data.port || 22;
-  const ftpHost = "ftp.kamero.ai";
-  const ftpPort = 21;
-  const username = data.username || "";
-  const password = data.password || "";
-
-  return {
-    sftpHost,
-    sftpPort,
-    ftpHost,
-    ftpPort,
-    username,
-    password,
-    instructions: `1. Connect using SFTP (recommended) or FTP\n2. Use the credentials above\n3. Upload photos to the root directory\n4. Photos will be automatically processed and added to the event`,
-    ftpUploadCount: 0,
-  };
+  return response.json();
 }
-

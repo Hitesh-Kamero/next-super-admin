@@ -6,12 +6,12 @@ import { AuthGuard } from "@/components/auth-guard";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { getUser, getUserWallet, type AdminUserDetails, type AdminUserWalletBalance } from "@/lib/users-api";
 import { UserEditDialog } from "@/components/user-edit-dialog";
 import { WalletUpdateDialog } from "@/components/wallet-update-dialog";
 import { UserRestoreDialog } from "@/components/user-restore-dialog";
+import { RawJsonViewer } from "@/components/raw-json-viewer";
 import { toast } from "sonner";
 import { Search, Loader2, Calendar, User, Mail, Phone, ArrowLeft, LogIn, Wallet, Pencil, RotateCcw } from "lucide-react";
 import { generateLoginAsUserUrl } from "@/lib/utils";
@@ -172,34 +172,63 @@ export default function UsersPage() {
     <AuthGuard>
       <div className="flex min-h-screen flex-col bg-background font-sans">
         <main className="container mx-auto flex-1 px-4 py-8">
-          {/* Back button */}
-          <div className="mb-4 md:mb-6">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                const from = searchParams.get("from");
-                if (from === "recent-signups") {
-                  router.push("/recent-signups");
-                } else {
-                  router.push("/");
-                }
-              }}
-              className="mb-3 md:mb-4"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              {searchParams.get("from") === "recent-signups" ? "Back to Recent Signups" : "Back to Home"}
-            </Button>
-          </div>
-
           {/* Mobile: No outer card wrapper */}
           <div className="md:hidden mb-6">
-            <h1 className="text-2xl font-semibold mb-6">User Search</h1>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="search-mobile">Search User</Label>
-                <div className="flex gap-2 mt-2">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  const from = searchParams.get("from");
+                  if (from === "recent-signups") {
+                    router.push("/recent-signups");
+                  } else {
+                    router.push("/");
+                  }
+                }}
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <h1 className="text-lg font-semibold whitespace-nowrap">Users</h1>
+              <div className="flex gap-2 flex-1">
+                <Input
+                  id="search-mobile"
+                  placeholder="User ID, email, or mobile"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  className="flex-1"
+                />
+                <Button onClick={() => handleSearch()} disabled={loading}>
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Desktop: With card wrapper */}
+          <div className="hidden md:block">
+            <Card className="p-4 mb-6">
+              <div className="flex items-center gap-4">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const from = searchParams.get("from");
+                    if (from === "recent-signups") {
+                      router.push("/recent-signups");
+                    } else {
+                      router.push("/");
+                    }
+                  }}
+                >
+                  <ArrowLeft className="h-4 w-4 mr-1" />
+                  Back
+                </Button>
+                <h1 className="text-xl font-semibold whitespace-nowrap">User Search</h1>
+                <div className="flex gap-2 flex-1">
                   <Input
-                    id="search-mobile"
+                    id="search-desktop"
                     placeholder="Enter user ID, email, or mobile number"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
@@ -209,31 +238,6 @@ export default function UsersPage() {
                   <Button onClick={() => handleSearch()} disabled={loading}>
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                   </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Desktop: With card wrapper */}
-          <div className="hidden md:block">
-            <Card className="p-6 mb-6">
-              <h1 className="text-2xl font-semibold mb-6">User Search</h1>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="search-desktop">Search User</Label>
-                  <div className="flex gap-2 mt-2">
-                    <Input
-                      id="search-desktop"
-                      placeholder="Enter user ID, email, or mobile number"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      onKeyPress={handleKeyPress}
-                      className="flex-1"
-                    />
-                    <Button onClick={() => handleSearch()} disabled={loading}>
-                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                    </Button>
-                  </div>
                 </div>
               </div>
             </Card>
@@ -514,265 +518,189 @@ export default function UsersPage() {
               {/* Desktop: With card wrapper */}
               <div className="hidden md:block">
                 <Card className="p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-2xl font-semibold">
+                  <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-2xl font-bold">
                         {user.name || `${user.firstName || ""} ${user.lastName || ""}`.trim() || "User"}
                       </h2>
                       {user.isAccountSelfDeleted && (
-                        <Badge variant="destructive">Account Deleted</Badge>
+                        <Badge variant="destructive">Deleted</Badge>
                       )}
+                      {user.userType && <Badge variant="outline">{user.userType}</Badge>}
                     </div>
                     <div className="flex gap-2">
-                      <Button onClick={() => setEditDialogOpen(true)}>
-                        <Pencil className="h-4 w-4 mr-2" />
-                        Edit User
+                      <Button size="sm" onClick={() => setEditDialogOpen(true)}>
+                        <Pencil className="h-4 w-4 mr-1" />
+                        Edit
                       </Button>
                       {user.isAccountSelfDeleted && (
-                        <Button
-                          variant="outline"
-                          onClick={() => setRestoreDialogOpen(true)}
-                          className="text-orange-600 hover:text-orange-700"
-                        >
-                          <RotateCcw className="h-4 w-4 mr-2" />
-                          Restore Account
+                        <Button size="sm" variant="outline" onClick={() => setRestoreDialogOpen(true)}>
+                          <RotateCcw className="h-4 w-4 mr-1" />
+                          Restore
                         </Button>
                       )}
                       {user.email && !user.isAccountSelfDeleted && (
                         <Button
+                          size="sm"
                           variant="outline"
                           onClick={() => {
-                            try {
-                              const loginUrl = generateLoginAsUserUrl(user.email!);
-                              window.open(loginUrl, '_blank', 'noopener,noreferrer');
-                              toast.success(
-                                <div className="space-y-2">
-                                  <div>Opening login page in new tab</div>
-                                  <div className="text-xs font-mono break-all bg-muted p-2 rounded mt-2">
-                                    {loginUrl}
-                                  </div>
-                                </div>,
-                                { duration: 10000 }
-                              );
-                            } catch (error: any) {
-                              toast.error(error.message || "Failed to generate login URL");
-                            }
+                            const loginUrl = generateLoginAsUserUrl(user.email!);
+                            window.open(loginUrl, '_blank', 'noopener,noreferrer');
+                            toast.success("Opening login page");
                           }}
                         >
-                          <LogIn className="h-4 w-4 mr-2" />
-                          Login as User
+                          <LogIn className="h-4 w-4 mr-1" />
+                          Login As
                         </Button>
                       )}
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-6 mb-6">
-                    <div>
-                      <h3 className="font-semibold mb-3">Basic Information</h3>
-                      <div className="space-y-2 text-sm">
-                        <div><span className="font-medium">User ID: </span><span className="font-mono text-xs">{user.userId}</span></div>
-                        <div><span className="font-medium">Document ID: </span><span className="font-mono text-xs">{user.id}</span></div>
-                        {user.email && <div><span className="font-medium">Email: </span><span>{user.email}</span></div>}
-                        {user.phone && <div><span className="font-medium">Phone: </span><span>{user.phone}</span></div>}
-                        {user.createdAt && <div><span className="font-medium">Created: </span><span>{formatDate(user.createdAt)}</span></div>}
-                        {user.whitelabelId && <div><span className="font-medium">Whitelabel ID: </span><span className="font-mono text-xs">{user.whitelabelId}</span></div>}
+                  <div className="grid grid-cols-3 gap-6">
+                    {/* Column 1: IDs & Contact */}
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between py-1 border-b border-border/40">
+                        <span className="text-muted-foreground">User ID</span>
+                        <span className="font-mono text-xs">{user.userId}</span>
                       </div>
-                    </div>
-
-                    <div>
-                      <h3 className="font-semibold mb-3">Profile Information</h3>
-                      <div className="space-y-2 text-sm">
-                        {user.userType && (
-                          <div>
-                            <span className="font-medium">User Type: </span>
-                            <Badge variant="outline">{user.userType}</Badge>
-                          </div>
-                        )}
-                        {user.country && <div><span className="font-medium">Country: </span><span>{user.country}</span></div>}
-                        {user.city && <div><span className="font-medium">City: </span><span>{user.city}</span></div>}
-                        {user.firstName && <div><span className="font-medium">First Name: </span><span>{user.firstName}</span></div>}
-                        {user.lastName && <div><span className="font-medium">Last Name: </span><span>{user.lastName}</span></div>}
+                      <div className="flex justify-between py-1 border-b border-border/40">
+                        <span className="text-muted-foreground">Doc ID</span>
+                        <span className="font-mono text-xs">{user.id}</span>
                       </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-6 mb-6">
-                    <div>
-                      <h3 className="font-semibold mb-3">Phone Verification</h3>
-                      <div className="space-y-2 text-sm">
-                        {user.phoneVerificationStatus && (
-                          <div>
-                            <span className="font-medium">Status: </span>
-                            <Badge variant={getPhoneVerificationBadgeVariant(user.phoneVerificationStatus)}>
-                              {user.phoneVerificationStatus}
-                            </Badge>
-                          </div>
-                        )}
-                        {user.whatsappOtpVerified !== undefined && (
-                          <div>
-                            <span className="font-medium">WhatsApp OTP Verified: </span>
-                            <Badge variant={user.whatsappOtpVerified ? "default" : "secondary"}>
-                              {user.whatsappOtpVerified ? "Yes" : "No"}
-                            </Badge>
-                          </div>
-                        )}
-                        {user.whatsappAvailable !== undefined && (
-                          <div>
-                            <span className="font-medium">WhatsApp Available: </span>
-                            <Badge variant={user.whatsappAvailable ? "default" : "secondary"}>
-                              {user.whatsappAvailable ? "Yes" : "No"}
-                            </Badge>
-                          </div>
-                        )}
-                        {user.otpAttemptCount !== undefined && (
-                          <div><span className="font-medium">OTP Attempts: </span><span>{user.otpAttemptCount}</span></div>
-                        )}
-                        {user.lastOtpAttempt && (
-                          <div><span className="font-medium">Last OTP Attempt: </span><span>{formatDate(user.lastOtpAttempt)}</span></div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div>
-                      <h3 className="font-semibold mb-3">Account Information</h3>
-                      <div className="space-y-2 text-sm">
-                        {user.isAccountSelfDeleted && (
-                          <div>
-                            <span className="font-medium">Account Status: </span>
-                            <Badge variant="destructive">Deleted</Badge>
-                            {user.accountSelfDeletedAt && (
-                              <div className="text-xs text-muted-foreground mt-1">
-                                Deleted at: {formatDate(user.accountSelfDeletedAt)}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        {user.isEndUser !== undefined && (
-                          <div>
-                            <span className="font-medium">Is End User: </span>
-                            <Badge variant={user.isEndUser ? "default" : "secondary"}>
-                              {user.isEndUser ? "Yes" : "No"}
-                            </Badge>
-                          </div>
-                        )}
-                        {user.subscriptionId && (
-                          <div><span className="font-medium">Subscription ID: </span><span className="font-mono text-xs">{user.subscriptionId}</span></div>
-                        )}
-                        {user.lastAccessedAt && (
-                          <div><span className="font-medium">Last Accessed: </span><span>{formatDate(user.lastAccessedAt)}</span></div>
-                        )}
-                        {user.activeAsEndUser && (
-                          <div><span className="font-medium">Active as End User: </span><span>{formatDate(user.activeAsEndUser)}</span></div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-6">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-semibold">Wallet Balance</h3>
-                      {walletBalance && (
-                        <Button size="sm" variant="outline" onClick={() => setWalletDialogOpen(true)}>
-                          <Pencil className="h-3 w-3 mr-1" />
-                          Update Balance
-                        </Button>
+                      {user.email && (
+                        <div className="flex justify-between py-1 border-b border-border/40">
+                          <span className="text-muted-foreground">Email</span>
+                          <span>{user.email}</span>
+                        </div>
+                      )}
+                      {user.phone && (
+                        <div className="flex justify-between py-1 border-b border-border/40">
+                          <span className="text-muted-foreground">Phone</span>
+                          <span>{user.phone}</span>
+                        </div>
+                      )}
+                      {user.whitelabelId && (
+                        <div className="flex justify-between py-1 border-b border-border/40">
+                          <span className="text-muted-foreground">Whitelabel</span>
+                          <span className="font-mono text-xs">{user.whitelabelId}</span>
+                        </div>
+                      )}
+                      {user.subscriptionId && (
+                        <div className="flex justify-between py-1 border-b border-border/40">
+                          <span className="text-muted-foreground">Subscription</span>
+                          <button
+                            onClick={() => router.push(`/subscriptions?subscriptionId=${encodeURIComponent(user.subscriptionId!)}`)}
+                            className="font-mono text-xs text-blue-500 hover:underline"
+                          >
+                            {user.subscriptionId.slice(0, 8)}...
+                          </button>
+                        </div>
+                      )}
+                      {user.createdAt && (
+                        <div className="flex justify-between py-1">
+                          <span className="text-muted-foreground">Created</span>
+                          <span>{formatDate(user.createdAt)}</span>
+                        </div>
                       )}
                     </div>
-                    {walletLoading ? (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Loading wallet balance...</span>
-                      </div>
-                    ) : walletBalance ? (
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          <Wallet className="h-4 w-4" />
-                          <span className="font-medium">Balance: </span>
-                          <span className="font-semibold text-xl">
-                            {formatCurrency(walletBalance.balanceInRupees || walletBalance.balance / 100)}
-                          </span>
+
+                    {/* Column 2: Verification & Status */}
+                    <div className="space-y-2 text-sm">
+                      {user.phoneVerificationStatus && (
+                        <div className="flex justify-between items-center py-1 border-b border-border/40">
+                          <span className="text-muted-foreground">Phone Status</span>
+                          <Badge variant={getPhoneVerificationBadgeVariant(user.phoneVerificationStatus)} className="text-xs">
+                            {user.phoneVerificationStatus}
+                          </Badge>
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          <span className="font-medium">Balance in Paise: </span>
-                          <span className="font-mono">{walletBalance.balance.toLocaleString()}</span>
+                      )}
+                      {user.whatsappOtpVerified !== undefined && (
+                        <div className="flex justify-between items-center py-1 border-b border-border/40">
+                          <span className="text-muted-foreground">WhatsApp OTP</span>
+                          <Badge variant={user.whatsappOtpVerified ? "default" : "secondary"} className="text-xs">
+                            {user.whatsappOtpVerified ? "Verified" : "No"}
+                          </Badge>
                         </div>
-                        {walletBalance.whitelabelId && (
-                          <div>
-                            <span className="font-medium">Whitelabel ID: </span>
-                            <span className="font-mono text-xs">{walletBalance.whitelabelId}</span>
+                      )}
+                      {user.isEndUser !== undefined && (
+                        <div className="flex justify-between items-center py-1 border-b border-border/40">
+                          <span className="text-muted-foreground">End User</span>
+                          <Badge variant={user.isEndUser ? "default" : "secondary"} className="text-xs">
+                            {user.isEndUser ? "Yes" : "No"}
+                          </Badge>
+                        </div>
+                      )}
+                      {user.lastAccessedAt && (
+                        <div className="flex justify-between py-1 border-b border-border/40">
+                          <span className="text-muted-foreground">Last Access</span>
+                          <span>{formatDate(user.lastAccessedAt)}</span>
+                        </div>
+                      )}
+                      {user.authMethods && user.authMethods.length > 0 && (
+                        <div className="flex justify-between items-center py-1">
+                          <span className="text-muted-foreground">Auth</span>
+                          <div className="flex gap-1">
+                            {user.authMethods.map((m, i) => (
+                              <Badge key={i} variant="outline" className="text-xs">{m}</Badge>
+                            ))}
                           </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Column 3: Wallet & Stats */}
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between items-center py-1 border-b border-border/40">
+                        <span className="text-muted-foreground">Wallet</span>
+                        {walletLoading ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : walletBalance ? (
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-green-600">
+                              {formatCurrency(walletBalance.balanceInRupees || walletBalance.balance / 100)}
+                            </span>
+                            <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => setWalletDialogOpen(true)}>
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">N/A</span>
                         )}
                       </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">No wallet information available</p>
-                    )}
+                      {(user.freeEnhancementsUsed !== undefined || user.freeEnhancementsLimit !== undefined) && (
+                        <div className="flex justify-between py-1 border-b border-border/40">
+                          <span className="text-muted-foreground">AI Enhance</span>
+                          <span>{user.freeEnhancementsUsed ?? 0} / {user.freeEnhancementsLimit ?? 0}</span>
+                        </div>
+                      )}
+                      {user.country && (
+                        <div className="flex justify-between py-1 border-b border-border/40">
+                          <span className="text-muted-foreground">Country</span>
+                          <span>{user.country}</span>
+                        </div>
+                      )}
+                      {user.city && (
+                        <div className="flex justify-between py-1 border-b border-border/40">
+                          <span className="text-muted-foreground">City</span>
+                          <span>{user.city}</span>
+                        </div>
+                      )}
+                      {user.defaultSelfieId && (
+                        <div className="flex justify-between py-1">
+                          <span className="text-muted-foreground">Selfie ID</span>
+                          <span className="font-mono text-xs">{user.defaultSelfieId.slice(0, 8)}...</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-
-                  {user.authMethods && user.authMethods.length > 0 && (
-                    <div className="mb-6">
-                      <h3 className="font-semibold mb-3">Authentication Methods</h3>
-                      <div className="flex flex-wrap gap-2">
-                        {user.authMethods.map((method, idx) => (
-                          <Badge key={idx} variant="outline">{method}</Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {(user.googleId || user.profilePictureUrl || user.lastGoogleLoginAt) && (
-                    <div className="mb-6">
-                      <h3 className="font-semibold mb-3">Google OAuth</h3>
-                      <div className="space-y-2 text-sm">
-                        {user.googleId && (
-                          <div><span className="font-medium">Google ID: </span><span className="font-mono text-xs">{user.googleId}</span></div>
-                        )}
-                        {user.profilePictureUrl && (
-                          <div>
-                            <span className="font-medium">Profile Picture: </span>
-                            <a href={user.profilePictureUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                              View
-                            </a>
-                          </div>
-                        )}
-                        {user.lastGoogleLoginAt && (
-                          <div><span className="font-medium">Last Google Login: </span><span>{formatDate(user.lastGoogleLoginAt)}</span></div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {(user.freeEnhancementsUsed !== undefined || user.freeEnhancementsLimit !== undefined) && (
-                    <div className="mb-6">
-                      <h3 className="font-semibold mb-3">AI Enhancements</h3>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        {user.freeEnhancementsUsed !== undefined && (
-                          <div>
-                            <div className="font-medium">Used</div>
-                            <div className="text-2xl font-bold">{user.freeEnhancementsUsed}</div>
-                          </div>
-                        )}
-                        {user.freeEnhancementsLimit !== undefined && (
-                          <div>
-                            <div className="font-medium">Limit</div>
-                            <div className="text-2xl font-bold">{user.freeEnhancementsLimit}</div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {user.defaultSelfieId && (
-                    <div>
-                      <h3 className="font-semibold mb-3">Face Recognition</h3>
-                      <div className="text-sm">
-                        <span className="font-medium">Default Selfie ID: </span>
-                        <span className="font-mono text-xs">{user.defaultSelfieId}</span>
-                      </div>
-                    </div>
-                  )}
                 </Card>
               </div>
             </div>
+          )}
+
+          {/* Raw JSON Document */}
+          {user && (
+            <RawJsonViewer data={user} title="Raw User JSON" />
           )}
 
           {/* Edit Dialogs */}

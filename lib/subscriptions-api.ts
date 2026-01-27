@@ -148,3 +148,55 @@ export function getAvailablePlans(currentMaxPhotos: number, isUpgrade: boolean):
     return allPlans;
   }
 }
+
+
+/**
+ * Get active subscription for a user by user ID
+ * This handles both Kamero users (subscription on user) and whitelabel users (subscription on whitelabel)
+ */
+export async function getSubscriptionForUser(userId: string): Promise<AdminSubscriptionDetails | null> {
+  try {
+    // First get the user to find their subscription ID or whitelabel ID
+    const userResponse = await authenticatedFetch(
+      `${API_BASE_URL}/admin/users/get?query=${encodeURIComponent(userId.trim())}`
+    );
+
+    if (!userResponse.ok) {
+      return null;
+    }
+
+    const user = await userResponse.json();
+    
+    // Check if user has a direct subscription ID (Kamero user)
+    if (user.subscriptionId) {
+      try {
+        return await getSubscription(user.subscriptionId);
+      } catch {
+        return null;
+      }
+    }
+
+    // For whitelabel users, we need to get the whitelabel's subscription
+    // This requires fetching the whitelabel document
+    if (user.whitelabelId && user.whitelabelId !== 'whitelabel-0') {
+      try {
+        const whitelabelResponse = await authenticatedFetch(
+          `${API_BASE_URL}/admin/whitelabels/get?whitelabelId=${encodeURIComponent(user.whitelabelId)}`
+        );
+        
+        if (whitelabelResponse.ok) {
+          const whitelabel = await whitelabelResponse.json();
+          if (whitelabel.subscriptionId) {
+            return await getSubscription(whitelabel.subscriptionId);
+          }
+        }
+      } catch {
+        return null;
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
