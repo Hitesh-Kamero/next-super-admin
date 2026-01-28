@@ -15,6 +15,7 @@ import {
   type AdminWhitelabelDetails,
 } from "@/lib/whitelabels-api";
 import { WalletUpdateDialog } from "@/components/wallet-update-dialog";
+import { CreateSubscriptionDialog } from "@/components/create-subscription-dialog";
 import { toast } from "sonner";
 import {
   Search,
@@ -27,6 +28,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Building2,
+  CreditCard,
 } from "lucide-react";
 
 export default function WhitelabelsPage() {
@@ -47,6 +49,7 @@ export default function WhitelabelsPage() {
 
   // Wallet dialog state
   const [walletDialogOpen, setWalletDialogOpen] = useState(false);
+  const [createSubscriptionDialogOpen, setCreateSubscriptionDialogOpen] = useState(false);
 
   // Auto-search if whitelabelId is provided in query params
   useEffect(() => {
@@ -237,7 +240,7 @@ export default function WhitelabelsPage() {
                         </button>
                       </div>
                     )}
-                    {whitelabel.subscriptionId && (
+                    {whitelabel.subscriptionId ? (
                       <div>
                         <span className="font-medium">Subscription ID: </span>
                         <button
@@ -246,6 +249,19 @@ export default function WhitelabelsPage() {
                         >
                           {whitelabel.subscriptionId}
                         </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <span className="font-medium">Subscription: </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setCreateSubscriptionDialogOpen(true)}
+                          className="ml-2"
+                        >
+                          <CreditCard className="h-3 w-3 mr-1" />
+                          Create Subscription
+                        </Button>
                       </div>
                     )}
                     {whitelabel.createdAt && (
@@ -290,6 +306,18 @@ export default function WhitelabelsPage() {
                 onOpenChange={setWalletDialogOpen}
                 onSuccess={handleWalletSuccess}
               />
+
+              {/* Create Subscription Dialog - only for whitelabels without subscription */}
+              {!whitelabel.subscriptionId && (
+                <CreateSubscriptionDialog
+                  targetId={whitelabel.id}
+                  targetType="whitelabel"
+                  targetName={whitelabel.name || whitelabel.id}
+                  open={createSubscriptionDialogOpen}
+                  onOpenChange={setCreateSubscriptionDialogOpen}
+                  onSuccess={handleWalletSuccess}
+                />
+              )}
             </Card>
           )}
 

@@ -793,7 +793,12 @@ export default function SupportTicketDetailPage() {
                         variant="outline"
                         size="icon"
                         className="h-10 w-10 shrink-0"
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={() => {
+                          setIsReplyOpen(true);
+                          // Delay file picker to allow dialog to render
+                          setTimeout(() => fileInputRef.current?.click(), 100);
+                        }}
+                        title="Add attachment"
                       >
                         <Paperclip className="h-4 w-4" />
                       </Button>
@@ -822,6 +827,16 @@ export default function SupportTicketDetailPage() {
             </div>
           </div>
         </main>
+
+        {/* Hidden file input - placed outside dialog so it's always available */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*"
+          multiple
+          onChange={handleFileSelect}
+          className="hidden"
+        />
 
         {/* Reply Dialog - Enhanced */}
         <Dialog open={isReplyOpen} onOpenChange={(open) => {
@@ -886,15 +901,6 @@ export default function SupportTicketDetailPage() {
                     Add Files
                   </Button>
                 </div>
-                
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*,video/*"
-                  multiple
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
                 
                 {replyAttachments.length > 0 && (
                   <div className="mt-2">

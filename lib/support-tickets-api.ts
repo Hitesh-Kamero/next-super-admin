@@ -285,7 +285,12 @@ export async function getAdminPresignedUrl(
     throw new Error(error.message || "Failed to get presigned URL");
   }
 
-  return response.json();
+  const data = await response.json();
+  // Map backend response fields to expected frontend fields
+  return {
+    presignedUrl: data.url,
+    storageKey: data.objectName,
+  };
 }
 
 /**

@@ -8,12 +8,14 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { getUser, getUserWallet, type AdminUserDetails, type AdminUserWalletBalance } from "@/lib/users-api";
+import { getWhitelabel } from "@/lib/whitelabels-api";
 import { UserEditDialog } from "@/components/user-edit-dialog";
 import { WalletUpdateDialog } from "@/components/wallet-update-dialog";
 import { UserRestoreDialog } from "@/components/user-restore-dialog";
 import { RawJsonViewer } from "@/components/raw-json-viewer";
+import { CreateSubscriptionDialog } from "@/components/create-subscription-dialog";
 import { toast } from "sonner";
-import { Search, Loader2, Calendar, User, Mail, Phone, ArrowLeft, LogIn, Wallet, Pencil, RotateCcw } from "lucide-react";
+import { Search, Loader2, Calendar, User, Mail, Phone, ArrowLeft, LogIn, Wallet, Pencil, RotateCcw, CreditCard } from "lucide-react";
 import { generateLoginAsUserUrl } from "@/lib/utils";
 
 export default function UsersPage() {
@@ -27,6 +29,8 @@ export default function UsersPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [walletDialogOpen, setWalletDialogOpen] = useState(false);
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
+  const [createSubscriptionDialogOpen, setCreateSubscriptionDialogOpen] = useState(false);
+  const [whitelabelSubscriptionId, setWhitelabelSubscriptionId] = useState<string | null>(null);
 
   // Auto-search if userId is provided in query params
   useEffect(() => {
@@ -37,16 +41,22 @@ export default function UsersPage() {
       const performSearch = async () => {
         setLoading(true);
         setUser(null);
+        setWhitelabelSubscriptionId(null);
         try {
           const result = await getUser(userId);
           setUser(result);
           toast.success("User found successfully");
           // Fetch wallet balance
           fetchWalletBalance(result.userId);
+          // For whitelabel users, fetch whitelabel's subscription
+          if (result.whitelabelId && result.whitelabelId !== "whitelabel-0") {
+            fetchWhitelabelSubscription(result.whitelabelId);
+          }
         } catch (error: any) {
           toast.error(error.message || "Failed to get user");
           setUser(null);
           setWalletBalance(null);
+          setWhitelabelSubscriptionId(null);
         } finally {
           setLoading(false);
         }
@@ -65,6 +75,7 @@ export default function UsersPage() {
 
     setLoading(true);
     setUser(null);
+    setWhitelabelSubscriptionId(null);
     try {
       const result = await getUser(searchValue);
       setUser(result);
@@ -73,10 +84,15 @@ export default function UsersPage() {
       router.replace(`/users?userId=${encodeURIComponent(searchValue)}`, { scroll: false });
       // Fetch wallet balance
       fetchWalletBalance(result.userId);
+      // For whitelabel users, fetch whitelabel's subscription
+      if (result.whitelabelId && result.whitelabelId !== "whitelabel-0") {
+        fetchWhitelabelSubscription(result.whitelabelId);
+      }
     } catch (error: any) {
       toast.error(error.message || "Failed to get user");
       setUser(null);
       setWalletBalance(null);
+      setWhitelabelSubscriptionId(null);
     } finally {
       setLoading(false);
     }
@@ -111,17 +127,53 @@ export default function UsersPage() {
     }
   };
 
+  const fetchWhitelabelSubscription = async (whitelabelId: string) => {
+    try {
+      const whitelabel = await getWhitelabel(whitelabelId);
+      setWhitelabelSubscriptionId(whitelabel.subscriptionId || null);
+    } catch (error: any) {
+      console.error("Failed to fetch whitelabel subscription:", error);
+      setWhitelabelSubscriptionId(null);
+    }
+  };
+
   const handleEditSuccess = async () => {
     // Refresh user data after successful edit
     if (user) {
       try {
         const result = await getUser(user.id);
         setUser(result);
+        // Also refresh whitelabel subscription if applicable
+        if (result.whitelabelId && result.whitelabelId !== "whitelabel-0") {
+          fetchWhitelabelSubscription(result.whitelabelId);
+        }
         toast.success("User data refreshed");
       } catch (error: any) {
         toast.error("Failed to refresh user data");
       }
     }
+  };
+
+  // Helper to check if user/whitelabel has a subscription
+  const hasSubscription = () => {
+    if (!user) return true; // Don't show button if no user
+    // For Kamero users, check user's subscriptionId
+    if (!user.whitelabelId || user.whitelabelId === "whitelabel-0") {
+      return !!user.subscriptionId;
+    }
+    // For whitelabel users, check whitelabel's subscriptionId
+    return !!whitelabelSubscriptionId;
+  };
+
+  // Helper to get the effective subscription ID to display
+  const getEffectiveSubscriptionId = () => {
+    if (!user) return null;
+    // For Kamero users, return user's subscriptionId
+    if (!user.whitelabelId || user.whitelabelId === "whitelabel-0") {
+      return user.subscriptionId;
+    }
+    // For whitelabel users, return whitelabel's subscriptionId
+    return whitelabelSubscriptionId;
   };
 
   const handleWalletSuccess = async () => {
@@ -421,10 +473,31 @@ export default function UsersPage() {
                         </Badge>
                       </div>
                     )}
-                    {user.subscriptionId && (
+                    {getEffectiveSubscriptionId() ? (
                       <div>
                         <span className="font-medium">Subscription ID: </span>
-                        <span className="font-mono text-xs">{user.subscriptionId}</span>
+                        <button
+                          onClick={() => router.push(`/subscriptions?subscriptionId=${encodeURIComponent(getEffectiveSubscriptionId()!)}`)}
+                          className="font-mono text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline cursor-pointer"
+                        >
+                          {getEffectiveSubscriptionId()}
+                        </button>
+                        {user.whitelabelId && user.whitelabelId !== "whitelabel-0" && (
+                          <span className="text-xs text-muted-foreground ml-1">(Whitelabel)</span>
+                        )}
+                      </div>
+                    ) : (
+                      <div>
+                        <span className="font-medium">Subscription: </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setCreateSubscriptionDialogOpen(true)}
+                          className="ml-2"
+                        >
+                          <CreditCard className="h-3 w-3 mr-1" />
+                          Create {user.whitelabelId && user.whitelabelId !== "whitelabel-0" ? "(for Whitelabel)" : ""}
+                        </Button>
                       </div>
                     )}
                     {user.lastAccessedAt && (
@@ -585,15 +658,28 @@ export default function UsersPage() {
                           <span className="font-mono text-xs">{user.whitelabelId}</span>
                         </div>
                       )}
-                      {user.subscriptionId && (
+                      {getEffectiveSubscriptionId() ? (
                         <div className="flex justify-between py-1 border-b border-border/40">
-                          <span className="text-muted-foreground">Subscription</span>
+                          <span className="text-muted-foreground">Subscription{user.whitelabelId && user.whitelabelId !== "whitelabel-0" ? " (WL)" : ""}</span>
                           <button
-                            onClick={() => router.push(`/subscriptions?subscriptionId=${encodeURIComponent(user.subscriptionId!)}`)}
+                            onClick={() => router.push(`/subscriptions?subscriptionId=${encodeURIComponent(getEffectiveSubscriptionId()!)}`)}
                             className="font-mono text-xs text-blue-500 hover:underline"
                           >
-                            {user.subscriptionId.slice(0, 8)}...
+                            {getEffectiveSubscriptionId()!.slice(0, 8)}...
                           </button>
+                        </div>
+                      ) : (
+                        <div className="flex justify-between items-center py-1 border-b border-border/40">
+                          <span className="text-muted-foreground">Subscription</span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 px-2"
+                            onClick={() => setCreateSubscriptionDialogOpen(true)}
+                          >
+                            <CreditCard className="h-3 w-3 mr-1" />
+                            Create{user.whitelabelId && user.whitelabelId !== "whitelabel-0" ? " (WL)" : ""}
+                          </Button>
                         </div>
                       )}
                       {user.createdAt && (
@@ -728,6 +814,21 @@ export default function UsersPage() {
               open={restoreDialogOpen}
               onOpenChange={setRestoreDialogOpen}
               onSuccess={handleRestoreSuccess}
+            />
+          )}
+          {/* Create Subscription Dialog - for users without subscription */}
+          {/* For Kamero users (whitelabel-0): create subscription for user */}
+          {/* For whitelabel users: create subscription for their whitelabel */}
+          {user && !hasSubscription() && (
+            <CreateSubscriptionDialog
+              targetId={user.whitelabelId && user.whitelabelId !== "whitelabel-0" ? user.whitelabelId : user.userId}
+              targetType={user.whitelabelId && user.whitelabelId !== "whitelabel-0" ? "whitelabel" : "user"}
+              targetName={user.whitelabelId && user.whitelabelId !== "whitelabel-0" 
+                ? `Whitelabel: ${user.whitelabelId}` 
+                : (user.name || user.email || user.userId)}
+              open={createSubscriptionDialogOpen}
+              onOpenChange={setCreateSubscriptionDialogOpen}
+              onSuccess={handleEditSuccess}
             />
           )}
         </main>

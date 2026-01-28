@@ -118,14 +118,74 @@ export interface SubscriptionPlan {
   period?: string;
   interval?: number;
   uploadLimit: number;
-  maxPhotosLimit: number;
+  maxPhotosLimit?: number;
+  maxEvents?: number;
   amountINR?: number;
   amountUSD?: number;
+  gstAmountINR?: number;
+  totalAmountINR?: number;
+  disableINR?: boolean;
+}
+
+/**
+ * Get available subscription plans from the API
+ */
+export async function getPlans(): Promise<SubscriptionPlan[]> {
+  const response = await authenticatedFetch(
+    `${API_BASE_URL}/admin/plans`
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: "Failed to get plans" }));
+    throw new Error(error.message || "Failed to get plans");
+  }
+
+  const data = await response.json();
+  return data.plans || [];
+}
+
+export interface AdminSubscriptionCreateRequest {
+  targetId: string;
+  targetType: "user" | "whitelabel";
+  packageId: string;
+  startDate: string;
+  proofFileUrl: string;
+  currency?: "INR" | "USD";
+}
+
+export interface AdminSubscriptionCreateResponse {
+  success: boolean;
+  subscriptionId: string;
+  message?: string;
+}
+
+/**
+ * Create a new subscription for a user or whitelabel
+ */
+export async function createSubscription(data: AdminSubscriptionCreateRequest): Promise<AdminSubscriptionCreateResponse> {
+  const response = await authenticatedFetch(
+    `${API_BASE_URL}/admin/subscriptions/create`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: "Failed to create subscription" }));
+    throw new Error(error.message || "Failed to create subscription");
+  }
+
+  return response.json();
 }
 
 /**
  * Get available subscription plans (to be implemented)
  * For now, returns hardcoded plans based on Flutter app's logic
+ * @deprecated Use getPlans() instead
  */
 export function getAvailablePlans(currentMaxPhotos: number, isUpgrade: boolean): SubscriptionPlan[] {
   // These are sample plans - in production, this should fetch from the API
