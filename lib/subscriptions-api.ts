@@ -202,7 +202,9 @@ export function getAvailablePlans(currentMaxPhotos: number, isUpgrade: boolean):
 
   if (isUpgrade) {
     // For upgrades, show only plans with higher photo limit
-    return allPlans.filter(plan => plan.maxPhotosLimit > currentMaxPhotos);
+    return allPlans.filter(
+      (plan) => (plan.maxPhotosLimit ?? 0) > currentMaxPhotos
+    );
   } else {
     // For addons, show all plans (they add to existing limit)
     return allPlans;

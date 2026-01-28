@@ -171,9 +171,11 @@ export function SubscriptionUpdateDialog({
   const getNewLimit = () => {
     if (!selectedPlan) return 0;
     if (updateType === "addon") {
-      return (subscription.maxPhotosLimit || 0) + selectedPlan.maxPhotosLimit;
+      return (
+        (subscription.maxPhotosLimit || 0) + (selectedPlan.maxPhotosLimit ?? 0)
+      );
     }
-    return selectedPlan.maxPhotosLimit;
+    return selectedPlan.maxPhotosLimit ?? subscription.maxPhotosLimit ?? 0;
   };
 
   return (
@@ -234,7 +236,7 @@ export function SubscriptionUpdateDialog({
                       <div className="flex justify-between items-center w-full">
                         <span>{plan.name}</span>
                         <span className="text-muted-foreground ml-4">
-                          {plan.maxPhotosLimit.toLocaleString()} photos
+                          {(plan.maxPhotosLimit ?? 0).toLocaleString()} photos
                           {plan.amountINR && ` - ${formatCurrency(plan.amountINR)}`}
                         </span>
                       </div>
@@ -267,7 +269,7 @@ export function SubscriptionUpdateDialog({
                       {updateType === "addon" ? "Added: " : "New Plan: "}
                     </span>
                     {updateType === "addon"
-                      ? `+${selectedPlan.maxPhotosLimit.toLocaleString()}`
+                      ? `+${(selectedPlan.maxPhotosLimit ?? 0).toLocaleString()}`
                       : selectedPlan.name}
                   </div>
                 </div>
