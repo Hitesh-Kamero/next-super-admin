@@ -25,6 +25,41 @@ export interface ForSaleInfo {
   volumeDiscounts?: VolumeDiscount[];
 }
 
+/**
+ * Breakdown of how uploadsLeft is calculated
+ * Useful for debugging and admin display
+ */
+export interface UploadsLeftCalculation {
+  /** Event type: "pack" or "subscription" */
+  eventType: string;
+  /** Maximum photos allowed */
+  maxPhotos: number;
+  /** Photos reserved for guests */
+  guestMaxPhotos: number;
+  /** Current photos in event */
+  currentPhotosCount: number;
+  /** Total photos ever uploaded */
+  uploadedPhotosCount: number;
+  /** Current original files */
+  currentOriginalFilesCount: number;
+  /** Discounted originals (before Dec 8, 2025) */
+  discountedOriginals: number;
+  /** Effective originals that count as 2x */
+  effectiveOriginalFilesCount: number;
+  /** Safety limit (maxPhotos × 2.5) */
+  safetyLimit: number;
+  /** Safety capacity remaining */
+  safetyCapacity: number;
+  /** Normal capacity remaining */
+  normalCapacity: number;
+  /** Final uploads left */
+  uploadsLeft: number;
+  /** Formula explanation */
+  formula: string;
+  /** Data source (valkey/couchbase) */
+  counterSource: string;
+}
+
 export interface AdminEventDetails {
   id: string;
   name: string;
@@ -64,6 +99,8 @@ export interface AdminEventDetails {
   deletedPhotosCount?: number;
   currentPhotosCount?: number;
   uploadsLeft?: number;
+  /** Detailed breakdown of uploadsLeft calculation */
+  uploadsLeftCalculation?: UploadsLeftCalculation;
   views?: number;
   androidDevices?: number;
   iosDevices?: number;

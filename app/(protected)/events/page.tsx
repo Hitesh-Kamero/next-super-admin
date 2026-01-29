@@ -11,6 +11,7 @@ import { getEvent, recoverEvent, convertEventToSubscription, type AdminEventDeta
 import { getSubscriptionForUser, type AdminSubscriptionDetails } from "@/lib/subscriptions-api";
 import { EventEditDialog } from "@/components/event-edit-dialog";
 import { RawJsonViewer } from "@/components/raw-json-viewer";
+import { UploadsLeftCalculationCard } from "@/components/uploads-left-calculation";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Search, Loader2, Calendar, User, Hash, Tag, ArrowLeft, Lock, Pencil, RotateCcw, RefreshCw } from "lucide-react";
@@ -678,6 +679,11 @@ export default function EventsPage() {
                 </Card>
               </div>
             </div>
+          )}
+
+          {/* Uploads Left Calculation Breakdown */}
+          {event?.uploadsLeftCalculation && (
+            <UploadsLeftCalculationCard calculation={event.uploadsLeftCalculation} />
           )}
 
           {/* Raw JSON Document */}
