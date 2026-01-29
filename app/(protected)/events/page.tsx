@@ -164,8 +164,8 @@ export default function EventsPage() {
   };
 
   const getEventTypeLabel = (eventType?: number) => {
-    if (eventType === 1) return "Subscription-based";
-    if (eventType === 0) return "Normal (Pack-based)";
+    if (eventType === 1) return "Subscription";
+    if (eventType === 0) return "Pack";
     return "Unknown";
   };
 
