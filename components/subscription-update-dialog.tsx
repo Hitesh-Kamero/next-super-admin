@@ -23,7 +23,7 @@ import { Loader2, Upload, X, FileImage, Calendar } from "lucide-react";
 import {
   addOnSubscription,
   upgradeSubscription,
-  getAvailablePlans,
+  getPlans,
   type AdminSubscriptionDetails,
   type SubscriptionPlan,
 } from "@/lib/subscriptions-api";
@@ -50,16 +50,34 @@ export function SubscriptionUpdateDialog({
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofPreview, setProofPreview] = useState<string | null>(null);
   const [availablePlans, setAvailablePlans] = useState<SubscriptionPlan[]>([]);
+  const [loadingPlans, setLoadingPlans] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load available plans when dialog opens
+  // Load available plans from API when dialog opens
   useEffect(() => {
     if (open) {
-      const plans = getAvailablePlans(
-        subscription.maxPhotosLimit || 0,
-        updateType === "upgrade"
-      );
-      setAvailablePlans(plans);
+      setLoadingPlans(true);
+      getPlans()
+        .then((plans) => {
+          if (updateType === "upgrade") {
+            // For upgrades, show only plans with higher photo limit
+            const filteredPlans = plans.filter(
+              (plan) => (plan.maxPhotosLimit ?? 0) > (subscription.maxPhotosLimit || 0)
+            );
+            setAvailablePlans(filteredPlans);
+          } else {
+            // For addons, show all plans (they add to existing limit)
+            setAvailablePlans(plans);
+          }
+        })
+        .catch((error) => {
+          console.error("Failed to load plans:", error);
+          toast.error("Failed to load subscription plans");
+          setAvailablePlans([]);
+        })
+        .finally(() => {
+          setLoadingPlans(false);
+        });
       setSelectedPlanId("");
       clearProofFile();
     }
@@ -226,25 +244,32 @@ export function SubscriptionUpdateDialog({
             {/* Plan Selection */}
             <div className="space-y-2">
               <Label>Select Subscription Pack</Label>
-              <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a pack..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {availablePlans.map((plan) => (
-                    <SelectItem key={plan.id} value={plan.id}>
-                      <div className="flex justify-between items-center w-full">
-                        <span>{plan.name}</span>
-                        <span className="text-muted-foreground ml-4">
-                          {(plan.maxPhotosLimit ?? 0).toLocaleString()} photos
-                          {plan.amountINR && ` - ${formatCurrency(plan.amountINR)}`}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {availablePlans.length === 0 && (
+              {loadingPlans ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading plans...
+                </div>
+              ) : (
+                <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a pack..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availablePlans.map((plan) => (
+                      <SelectItem key={plan.id} value={plan.id}>
+                        <div className="flex justify-between items-center w-full">
+                          <span>{plan.name}</span>
+                          <span className="text-muted-foreground ml-4">
+                            {(plan.maxPhotosLimit ?? 0).toLocaleString()} photos
+                            {plan.amountINR && ` - ${formatCurrency(plan.amountINR)}`}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {!loadingPlans && availablePlans.length === 0 && (
                 <p className="text-sm text-muted-foreground">
                   {updateType === "upgrade"
                     ? "No higher plans available for upgrade."
