@@ -317,8 +317,8 @@ export default function SupportTicketDetailPage() {
       setUploadProgress(`Uploading ${i + 1}/${replyAttachments.length}: ${file.name}`);
       
       try {
-        // Get presigned URL
-        const { presignedUrl, storageKey } = await getAdminPresignedUrl(
+        // Get presigned URL with required headers
+        const { presignedUrl, storageKey, requiredHeaders } = await getAdminPresignedUrl(
           ticketId,
           file.name,
           file.type,
@@ -326,17 +326,38 @@ export default function SupportTicketDetailPage() {
           getFileType(file)
         );
         
-        // Upload file to GCS
+        // Build headers for GCS upload
+        // Content-Type is always required
+        const uploadHeaders: Record<string, string> = {
+          "Content-Type": file.type,
+        };
+        
+        // Add all required headers from backend response
+        // These headers were signed into the URL and MUST be included
+        if (requiredHeaders) {
+          Object.entries(requiredHeaders).forEach(([key, value]) => {
+            uploadHeaders[key] = value;
+          });
+        }
+        
+        console.log("Uploading to GCS with headers:", uploadHeaders);
+        
+        // Upload file to GCS with all required headers
         const uploadResponse = await fetch(presignedUrl, {
           method: "PUT",
-          headers: {
-            "Content-Type": file.type,
-          },
+          headers: uploadHeaders,
           body: file,
         });
         
         if (!uploadResponse.ok) {
-          throw new Error(`Failed to upload ${file.name}`);
+          const errorText = await uploadResponse.text().catch(() => "Unknown error");
+          console.error("GCS upload failed:", {
+            status: uploadResponse.status,
+            statusText: uploadResponse.statusText,
+            error: errorText,
+            headersSent: uploadHeaders,
+          });
+          throw new Error(`Failed to upload ${file.name}: ${uploadResponse.status} ${errorText}`);
         }
         
         uploadedAttachments.push({

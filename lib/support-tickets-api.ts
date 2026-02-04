@@ -263,7 +263,7 @@ export async function getAdminPresignedUrl(
   contentType: string,
   fileSize: number,
   fileType: "screenshot" | "video"
-): Promise<{ presignedUrl: string; storageKey: string }> {
+): Promise<{ presignedUrl: string; storageKey: string; requiredHeaders?: Record<string, string> }> {
   const response = await authenticatedFetch(
     `${API_BASE_URL}/admin/support_tickets/${ticketId}/presigned-url`,
     {
@@ -290,6 +290,7 @@ export async function getAdminPresignedUrl(
   return {
     presignedUrl: data.url,
     storageKey: data.objectName,
+    requiredHeaders: data.requiredHeaders,
   };
 }
 
